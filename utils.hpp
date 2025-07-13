@@ -4,8 +4,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
-#include <cstring>
-#include <sys/time.h>
 #include <unistd.h>       // getopt / getopt_long
 #include <getopt.h>
 #include <algorithm>
@@ -19,13 +17,12 @@
 struct Params {
     std::size_t   n_records   = 1'000'000;  // -n
     std::uint32_t payload_max = 256;        // -p
-    int           n_threads   = 0;          // -t   (0 ⇒ use hw_concurrency)
+    int           n_threads   = 0;          // -t   (0 => use hw_concurrency)
 };
 
 /*---------------------------------------------------------------------------*/
-/* 2.  Timing utilities (chrono version, C++-20)                              */
+/* 2.  Timing utilities (chrono version, C++-20)                             */
 /*---------------------------------------------------------------------------*/
-// ------------- macros ------------------------------------------------------
 #define BENCH_START(tag) \
     auto __bench_start_##tag = std::chrono::steady_clock::now()
 
@@ -33,8 +30,8 @@ struct Params {
     do {                                                                       \
         auto   __bench_end_##tag  = std::chrono::steady_clock::now();          \
         double __bench_ms_##tag   = std::chrono::duration<double,              \
-                                  std::milli>(__bench_end_##tag               \
-                                  - __bench_start_##tag).count();             \
+                                  std::milli>(__bench_end_##tag                \
+                                  - __bench_start_##tag).count();              \
         std::printf("[%-20s] %10.3f ms\n", #tag, __bench_ms_##tag);            \
     } while (0)
 
@@ -66,7 +63,14 @@ static inline Params parse_argv(int argc, char** argv)
     while ((c = getopt_long(argc, argv, "n:p:t:qc h", long_opts, nullptr)) != -1) {
         switch (c) {
             case 'n': opt.n_records   = std::strtoull(optarg, nullptr, 10); break;
-            case 'p': opt.payload_max = static_cast<std::uint32_t>(std::strtoul(optarg, nullptr, 10)); break;
+            case 'p':
+                opt.payload_max = static_cast<std::uint32_t>(std::strtoul(optarg,nullptr,10));
+                if (opt.payload_max < 8) {
+                    std::fprintf(stderr,
+                        "Error: --payload must be ≥ 8 (got %u)\n", opt.payload_max);
+                    std::exit(1);
+                }
+                break;
             case 't': opt.n_threads   = std::atoi(optarg); break;
             case 'h':
             default:
@@ -90,7 +94,7 @@ static inline Record* alloc_random_records(std::size_t n, std::uint32_t payload_
 {
     std::mt19937                     rng(seed);
     std::uniform_int_distribution<>  key_gen(0, INT32_MAX);
-    std::uniform_int_distribution<>  len_gen(1, payload_max);
+    std::uniform_int_distribution<>  len_gen(8, payload_max);
     std::uniform_int_distribution<>  byte_gen(0, 255);
 
     Record* rec = static_cast<Record*>(std::malloc(n * sizeof(Record)));
@@ -111,8 +115,11 @@ static inline Record* alloc_random_records(std::size_t n, std::uint32_t payload_
 static inline void release_records(Record* base, std::size_t n)
 {
     if (!base) return;
-    for (std::size_t i = 0; i < n; ++i)
-        std::free(base[i].payload);
+    for (std::size_t i = 0; i < n; ++i) {
+        if (base[i].payload) {
+            std::free(base[i].payload);
+        }
+    }
     std::free(base);
 }
 
@@ -122,16 +129,13 @@ static inline void release_records(Record* base, std::size_t n)
 static inline void sort_records(Record* base, std::size_t n)
 {
     std::sort(base, base + n,
-              [](const Record& a, const Record& b) { return a.key < b.key; });
+            [](const Record& a, const Record& b) { return a.key < b.key; });
 }
 
-static inline int is_sorted(const Record* base, std::size_t n)
+static inline bool is_sorted(const Record* base, std::size_t n)
 {
-    for (std::size_t i = 1; i < n; ++i) {
-        if (base[i - 1].key > base[i].key)
-            return 0;
-    }
-    return 1;
+    return std::is_sorted(base, base + n,
+            [](const Record& a, const Record& b){ return a.key < b.key; });
 }
 
 static inline void dump_records(const Record* base, std::size_t n, std::size_t max_lines = 10)

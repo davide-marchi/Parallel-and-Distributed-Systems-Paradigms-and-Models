@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e                                   # stop on first error
 
-PAYLOADS=(1 64)
+PAYLOADS=(8 64)
 ARRAY_SIZE=(10000 100000 1000000 10000000 50000000 100000000)
 
 mkdir -p results
