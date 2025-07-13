@@ -1,5 +1,9 @@
-# Ignore compiled output files
-*.out
+# Build artifacts
+/build/
+/bin/
+*.o
+*.d
+*.dSYM
 
-# Ignore the fastflow folder (and everything inside it)
+# Ignore the fastflow folder
 fastflow/
