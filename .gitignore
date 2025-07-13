@@ -1,0 +1,5 @@
+# Ignore compiled output files
+*.out
+
+# Ignore the fastflow folder (and everything inside it)
+fastflow/
