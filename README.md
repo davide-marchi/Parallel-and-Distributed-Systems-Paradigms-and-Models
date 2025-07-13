@@ -40,7 +40,7 @@ and the number of FastFlow/OpenMP threads. Report speedup and efficiency varying
 threads on a single node, and strong and weak scalability curves on the spmcluster up to 8 nodes by 
 changing the number of MPI processes and the number of threads per process.  
 
-4. Analysis 
+4. Analysis  
 Provide an approximate cost model of your distributed solution. Summarize bottleneck phases, 
 computation-to-communication overlap effectiveness, challenges encountered, and optimizations you 
 adopted. 
