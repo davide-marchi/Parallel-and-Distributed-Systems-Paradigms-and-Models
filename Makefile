@@ -26,7 +26,7 @@ MPILIBS  := -lmpi
 
 # ------------------------------------------------------------------ sources
 SRCS := sequential.cpp \
-        # openmp.cpp     \
+        openmp.cpp     \
         # fastflow.cpp   \
         # mpi_omp.cpp    \
         # mpi_ff.cpp
@@ -52,8 +52,8 @@ $(BIN)/%: $(BUILD)/%.o
 # ------------------------------------------------------------------ special rules
 
 # openmp: CPP & link flags
-# openmp: CXXFLAGS += -fopenmp
-# openmp: LIBS     += -fopenmp
+$(BIN)/openmp: CXXFLAGS += -fopenmp
+$(BIN)/openmp: LIBS     += -fopenmp
 #
 # fastflow: INCLUDES += -I./fastflow
 #

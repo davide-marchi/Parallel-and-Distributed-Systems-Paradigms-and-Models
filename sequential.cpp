@@ -10,8 +10,7 @@ int main(int argc, char** argv)
     sort_records(rec, opt.n_records);
     BENCH_STOP(sort_records);
 
-    if (!is_sorted(rec, opt.n_records))
-        std::fprintf(stderr, "Array NOT sorted!\n");
+    check_if_sorted(rec, opt.n_records);
 
     // dump_records(rec, opt.n_records, 5);
 

@@ -10,6 +10,8 @@
 #include <random>
 #include <ctime>
 #include <chrono>
+#include <memory>     // std::unique_ptr
+#include <cstring>    // std::memcpy
 
 /*---------------------------------------------------------------------------*/
 /* 1.  Run-time parameters                                                   */
@@ -132,10 +134,14 @@ static inline void sort_records(Record* base, std::size_t n)
             [](const Record& a, const Record& b) { return a.key < b.key; });
 }
 
-static inline bool is_sorted(const Record* base, std::size_t n)
+static inline bool check_if_sorted(const Record* base, std::size_t n)
 {
-    return std::is_sorted(base, base + n,
-            [](const Record& a, const Record& b){ return a.key < b.key; });
+    if(!std::is_sorted(base, base + n,
+            [](const Record& a, const Record& b){ return a.key < b.key; })) {
+                std::fprintf(stderr, "Array NOT sorted!\n");
+                return false;
+            }
+    return true; 
 }
 
 static inline void dump_records(const Record* base, std::size_t n, std::size_t max_lines = 10)
@@ -146,21 +152,29 @@ static inline void dump_records(const Record* base, std::size_t n, std::size_t m
 }
 
 /*---------------------------------------------------------------------------*/
-/* 7.  Two-way merge (stable, shallow copy)                                  */
+/* 7.  Merge two sorted runs into an arbitrary destination                   */
+/*                                                                           */
+/*     dest may alias a  sub-range of  a  or  b.  The function allocates a   */
+/*     private scratch buffer, merges there (shallow copies only) and then   */
+/*     memcpy-s the result into dest.                                        */
 /*---------------------------------------------------------------------------*/
-static inline void merge_two_runs(const Record* a, std::size_t na,
-                                  const Record* b, std::size_t nb,
-                                  Record* out)
+static inline void merge_into_dest(const Record* a, std::size_t na,
+                                   const Record* b, std::size_t nb,
+                                   Record*       dest)
 {
+    const std::size_t n_total = na + nb;
+    /* unique_ptr  ⇒  automatic free when we return (RAII) */
+    std::unique_ptr<Record[]> tmp(new Record[n_total]);
+
+    /* classic two-finger merge ------------------------------------------- */
     std::size_t i = 0, j = 0, k = 0;
-    while (i < na && j < nb) {
-        if (a[i].key <= b[j].key)
-            out[k++] = a[i++];
-        else
-            out[k++] = b[j++];
-    }
-    while (i < na) out[k++] = a[i++];
-    while (j < nb) out[k++] = b[j++];
+    while (i < na && j < nb)
+        tmp[k++] = (a[i].key <= b[j].key) ? a[i++] : b[j++];
+    while (i < na) tmp[k++] = a[i++];
+    while (j < nb) tmp[k++] = b[j++];
+
+    /* copy back into caller-supplied destination ------------------------- */
+    std::memcpy(dest, tmp.get(), n_total * sizeof(Record));
 }
 
 /*---------------------------------------------------------------------------*/

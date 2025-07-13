@@ -7,3 +7,6 @@
 
 # Ignore the fastflow folder
 fastflow/
+
+# vscode
+.vscode/
