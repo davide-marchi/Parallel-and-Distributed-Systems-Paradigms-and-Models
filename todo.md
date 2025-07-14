@@ -6,3 +6,5 @@ OpenMP
 
 Fastflow
 - Run mapping_string.sh on remote machine (from inside the ff folder)
+- simplify task struct (why atomic when we can have bool?)
+- use init to make emitter generate the tasks and enqueue base cases asap
