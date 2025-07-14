@@ -1,9 +1,13 @@
 // fastflow.cpp — Task‑graph MergeSort using FastFlow farm+feedback (debug version)
 // -----------------------------------------------------------------------------
+//  This build fixes termination: FastFlow does **not** deliver bare nullptr
+//  across channels, it interprets it as EOS at the *worker* side, so the
+//  emitter never receives that message.  We now use a dedicated static
+//  sentinel `EOS_TASK` to signal completion of the root task.
+// -----------------------------------------------------------------------------
 //  Compile:
 //      g++ -std=c++17 -O2 -Wall -ffast-math -pthread -I./fastflow \
 //          fastflow.cpp utils.o -o bin/fastflow
-//  (FastFlow headers compile cleanly with C++17; C++20 may trip older releases.)
 // -----------------------------------------------------------------------------
 
 #include <ff/ff.hpp>
@@ -19,15 +23,16 @@ using namespace ff;
 /*  Task node                                                                 */
 /*---------------------------------------------------------------------------*/
 struct Task {
-    std::size_t left;      // inclusive
-    std::size_t mid;       // split point (valid only for merge tasks)
-    std::size_t right;     // inclusive
-    bool        is_sort;   // true ⇒ sort_records; false ⇒ merge_records
-    Task*       parent;    // nullptr for the *root* task only
-    std::atomic<int> remain{0}; // children still running (merge only)
+    std::size_t left;
+    std::size_t mid;
+    std::size_t right;
+    bool        is_sort;
+    Task*       parent;
+    std::atomic<int> remain{0};
 };
 
-static Record* g_base = nullptr;   // shared array for workers
+static Record* g_base = nullptr;
+static Task    EOS_TASK;               // sentinel passed from workers to emitter
 
 /*---------------------------------------------------------------------------*/
 /*  Build binary task tree                                                   */
@@ -37,11 +42,10 @@ static Task* build_tasks(std::size_t left, std::size_t right,
                          std::vector<Task*>& ready,
                          std::vector<Task*>& arena)
 {
-    std::size_t len = right - left + 1;
     Task* node = new Task{left, 0, right, /*is_sort*/ false, parent};
     arena.push_back(node);
 
-    if (len <= cutoff) {
+    if (right - left + 1 <= cutoff) {
         node->is_sort = true;
         ready.push_back(node);
         return node;
@@ -60,8 +64,6 @@ static Task* build_tasks(std::size_t left, std::size_t right,
 /*  Worker                                                                   */
 /*---------------------------------------------------------------------------*/
 struct Worker : ff_node_t<Task> {
-    explicit Worker(Task* root_) : root(root_) {}
-
     Task* svc(Task* task) override {
         const int id = ff_getThreadID();
         if (task->is_sort) {
@@ -71,19 +73,16 @@ struct Worker : ff_node_t<Task> {
             std::cout << "[Worker " << id << "] merge (" << task->left << "," << task->mid << "," << task->right << ")\n";
             merge_records(g_base, task->left, task->mid, task->right);
         }
-
-        // If this was the root, send the *root pointer* back (not nullptr)
-        return (task == root) ? task : task->parent;
+        // Signal completion: root -> EOS_TASK, others -> parent
+        return task->parent ? task->parent : &EOS_TASK;
     }
-private:
-    Task* root;
 };
 
 /*---------------------------------------------------------------------------*/
-/*  Emitter / feedback handler                                               */
+/*  Emitter                                                                  */
 /*---------------------------------------------------------------------------*/
 struct Emitter : ff_node_t<Task> {
-    Emitter(const std::vector<Task*>& init, Task* root_) : initial(init), root(root_) {}
+    explicit Emitter(const std::vector<Task*>& init) : initial(init) {}
 
     Task* svc(Task* in) override {
         if (!started) {
@@ -93,9 +92,9 @@ struct Emitter : ff_node_t<Task> {
             return GO_ON;
         }
 
-        if (in == root) {
+        if (in == &EOS_TASK) {
             std::cout << "[Emitter] root completed → EOS\n";
-            return EOS; // terminate farm
+            return EOS;
         }
 
         int left = --in->remain;
@@ -109,7 +108,6 @@ struct Emitter : ff_node_t<Task> {
 private:
     bool started = false;
     const std::vector<Task*>& initial;
-    Task* root;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -135,16 +133,16 @@ int main(int argc, char** argv)
     // Build task graph
     std::vector<Task*> leaves;
     std::vector<Task*> arena;
-    Task* root = build_tasks(0, N - 1, nullptr, cutoff, leaves, arena);
+    build_tasks(0, N - 1, nullptr, cutoff, leaves, arena);
 
     std::cout << "Leaves     : " << leaves.size() << "\n";
     std::cout << "Total tasks: " << arena.size()  << "\n";
 
-    // Create FastFlow farm
-    Emitter emitter(leaves, root);
+    // FastFlow farm creation
+    Emitter emitter(leaves);
     std::vector<ff_node*> workers;
     workers.reserve(nthreads);
-    for (int i = 0; i < nthreads; ++i) workers.push_back(new Worker(root));
+    for (int i = 0; i < nthreads; ++i) workers.push_back(new Worker());
 
     ff_farm farm;
     farm.add_emitter(&emitter);
@@ -153,7 +151,6 @@ int main(int argc, char** argv)
     farm.wrap_around();
 
     std::cout << "[Main] starting farm…\n";
-
     if (farm.run_and_wait_end() < 0) {
         error("FastFlow execution failed\n");
         return 1;
