@@ -152,29 +152,24 @@ static inline void dump_records(const Record* base, std::size_t n, std::size_t m
 }
 
 /*---------------------------------------------------------------------------*/
-/* 7.  Merge two sorted runs into an arbitrary destination                   */
-/*                                                                           */
-/*     dest may alias a  sub-range of  a  or  b.  The function allocates a   */
-/*     private scratch buffer, merges there (shallow copies only) and then   */
-/*     memcpy-s the result into dest.                                        */
+/* 7.  Merge two sorted runs into an arbitrary destination using a temp arr  */
 /*---------------------------------------------------------------------------*/
-static inline void merge_into_dest(const Record* a, std::size_t na,
-                                   const Record* b, std::size_t nb,
-                                   Record*       dest)
+static inline void merge_into_dest(const Record*  a,   std::size_t na,
+                                   const Record*  b,   std::size_t nb,
+                                   Record*        dest,
+                                   Record*        scratch)          // <- temp
 {
     const std::size_t n_total = na + nb;
-    /* unique_ptr  ⇒  automatic free when we return (RAII) */
-    std::unique_ptr<Record[]> tmp(new Record[n_total]);
 
-    /* classic two-finger merge ------------------------------------------- */
+    /* ---- merge into the scratch buffer --------------------------------- */
     std::size_t i = 0, j = 0, k = 0;
     while (i < na && j < nb)
-        tmp[k++] = (a[i].key <= b[j].key) ? a[i++] : b[j++];
-    while (i < na) tmp[k++] = a[i++];
-    while (j < nb) tmp[k++] = b[j++];
+        scratch[k++] = (a[i].key <= b[j].key) ? a[i++] : b[j++];
+    while (i < na)  scratch[k++] = a[i++];
+    while (j < nb)  scratch[k++] = b[j++];
 
-    /* copy back into caller-supplied destination ------------------------- */
-    std::memcpy(dest, tmp.get(), n_total * sizeof(Record));
+    /* ---- copy back into destination ------------------------------------ */
+    std::memcpy(dest, scratch, n_total * sizeof(Record));
 }
 
 /*---------------------------------------------------------------------------*/
