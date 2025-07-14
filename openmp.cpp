@@ -30,12 +30,12 @@ static inline void mergesort_task(Record* base,
         mergesort_task(base, mid+1, right,     cutoff);
 
         #pragma omp taskwait
+
+        /* merge the two sorted halves in-place -------------------------------*/
+        merge_records(base, left, mid, right); // Use merge_records wrapper
     } else {
         sort_records(base + left, right - left + 1); // Use sort_records for base case
     }
-
-    /* merge the two sorted halves in-place -------------------------------*/
-    merge_records(base, left, mid, right); // Use merge_records wrapper
 }
 
 /*-------------------------------------------------------------------------*/
