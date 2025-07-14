@@ -1,151 +1,162 @@
-// fastflow.cpp — Parallel merge‑sort using FastFlow with feedback
+// fastflow.cpp — Task‑graph merge‑sort with FastFlow farm+feedback
 // -----------------------------------------------------------------------------
-//  Strategy (task‑graph merge‑sort)
-//  ───────────────────────────────
-//  • Build the *entire* binary merge‑sort tree up‑front.  Each node is a Task.
-//    −  Leaf  (is_sort==true):  sub‑array length ≤ cutoff  →  sort_records.
-//    −  Internal (is_sort==false): merges two halves when both children finish.
-//  • Initial work list = all leaves; they’re pushed to a FastFlow farm.
-//  • Workers return a pointer to *parent* when they finish.  The farm has a
-//    feedback channel (wrap_around).  The emitter decrements parent->remain;
-//    when it reaches 0 the parent task is submitted.  When the root returns
-//    nullptr the emitter terminates.
+//  Build (example rule in Makefile):
+//      CXXFLAGS += -I./fastflow -pthread -std=c++20 -O3 -Wall -ffast-math
+//      bin/fastflow: fastflow.cpp utils.o …
 //
-//  Build / Run
-//  ───────────
-//      make fastflow           # see Makefile
-//      ./bin/fastflow -n 1000000 -p 256 -t 8 -c 4096
+//  Run:
+//      ./bin/fastflow  -n 1000000  -p 256  -t 8  -c 4096
+// -----------------------------------------------------------------------------
+//  Algorithm recap
+//  ───────────────
+//  1. Build the full binary merge‑sort tree once.  Leaves where
+//        (segment_len ≤ cutoff)  →  Task::is_sort == true.
+//  2. Push all leaves to a FastFlow farm (workers).  Each worker either:
+//        • sorts its segment (sort_records)  or
+//        • merges two sorted halves (merge_records).
+//     When done it returns the pointer to its *parent* task (or nullptr if
+//     it just completed the root).
+//  3. The farm is in *wrap‑around* mode, so completion messages arrive back at
+//     the emitter, which decrements parent->remain; when that reaches 0 the
+//     emitter submits the parent (merge) task.  When it receives nullptr it
+//     emits EOS, terminating the farm.
+//  4. No collector stage is needed.
 // -----------------------------------------------------------------------------
 
-#include <ff/farm.hpp>
-#include <atomic>
-#include <vector>
 #include "utils.hpp"
+#include <ff/ff.hpp>
+#include <ff/farm.hpp>
+#include <vector>
+#include <atomic>
 
 using namespace ff;
 
 /*---------------------------------------------------------------------------*/
-/*  Task structure                                                            */
+/*  Task object                                                              */
 /*---------------------------------------------------------------------------*/
 struct Task {
     std::size_t left;      // inclusive
-    std::size_t mid;       // split point (valid only for merge tasks)
+    std::size_t mid;       // split point (meaningful only for merge)
     std::size_t right;     // inclusive
-    bool        is_sort;   // true: sort_records; false: merge_records
-    Task*       parent;    // nullptr for the root
-    std::atomic<int> remain{0}; // children left to finish (only for merge)
+    bool        is_sort;   // true ⇒ sort_records, false ⇒ merge_records
+    Task*       parent;    // nullptr for root
+    std::atomic<int> remain{0}; // children not yet finished (for merge)
 };
 
-/* Global pointer to the record array so workers can access it --------------*/
-static Record* g_base = nullptr;
+static Record* g_base = nullptr;         // data array shared by workers
 
 /*---------------------------------------------------------------------------*/
-/*  Recursively build the task tree                                          */
+/*  Recursively create tasks                                                 */
 /*---------------------------------------------------------------------------*/
 static Task* build_tasks(std::size_t left, std::size_t right,
                          Task* parent, std::size_t cutoff,
-                         std::vector<Task*>& leaves,
-                         std::vector<Task*>& pool) {
+                         std::vector<Task*>& ready,
+                         std::vector<Task*>& arena)
+{
     std::size_t len = right - left + 1;
-    Task* node      = new Task{left, 0, right, /*is_sort*/ false, parent};
-    pool.push_back(node);
+    Task* t = new Task{left, 0, right, /*is_sort*/ false, parent};
+    arena.push_back(t);
 
     if (len <= cutoff) {
-        node->is_sort = true;
-        leaves.push_back(node);
-        return node;
+        t->is_sort = true;
+        ready.push_back(t);
+        return t;
     }
 
     std::size_t mid = (left + right) / 2;
-    node->mid       = mid;
-    node->remain    = 2;                 // wait for both children
+    t->mid    = mid;
+    t->remain = 2;
 
-    build_tasks(left, mid, node, cutoff, leaves, pool);
-    build_tasks(mid + 1, right, node, cutoff, leaves, pool);
-    return node;
+    build_tasks(left,     mid, t, cutoff, ready, arena);
+    build_tasks(mid + 1, right, t, cutoff, ready, arena);
+    return t;
 }
 
 /*---------------------------------------------------------------------------*/
-/*  Emitter with feedback                                                     */
+/*  Worker node (typed)                                                      */
 /*---------------------------------------------------------------------------*/
-class Emitter : public ff_node {
-public:
-    Emitter(const std::vector<Task*>& initial_leaves) : leaves(initial_leaves) {}
-
-    int svc_init() override {
-        // Push all initial leaf tasks into the farm
-        for (Task* t : leaves) ff_send_out(t);
-        return 0;
-    }
-
-    void* svc(void* msg) override {
-        Task* parent = static_cast<Task*>(msg); // nullptr ⇒ root finished
-        if (!parent) return EOS;                // terminate pipeline
-
-        if (--parent->remain == 0) {
-            ff_send_out(parent);                // schedule merge task
+struct Worker : ff_node_t<Task> {
+    Task* svc(Task* task) override {
+        if (task->is_sort) {
+            sort_records(g_base + task->left, task->right - task->left + 1);
+        } else {
+            merge_records(g_base, task->left, task->mid, task->right);
         }
+        return task->parent;           // may be nullptr (root)
+    }
+};
+
+/*---------------------------------------------------------------------------*/
+/*  Emitter / feedback handler                                               */
+/*---------------------------------------------------------------------------*/
+struct Emitter : ff_monode_t<Task> {
+    explicit Emitter(const std::vector<Task*>& init) : initial(init) {}
+
+    Task* svc(Task* in) override {
+        if (in == nullptr) {                // first activation → push leaves
+            for (Task* t : initial)
+                ff_send_out(t, -1, 0);      // -1 chan id, ondemand sched
+            return GO_ON;
+        }
+
+        if (in == nullptr) return EOS;      // (shouldn’t happen)
+        if (in == (Task*)nullptr) return EOS; // root completed
+
+        if (--in->remain == 0)
+            ff_send_out(in, -1, 0);
         return GO_ON;
     }
 private:
-    const std::vector<Task*>& leaves;
+    const std::vector<Task*>& initial;
 };
 
 /*---------------------------------------------------------------------------*/
-/*  Worker                                                                    */
+/*  Main                                                                     */
 /*---------------------------------------------------------------------------*/
-class Worker : public ff_node {
-public:
-    void* svc(void* ptr) override {
-        Task* t = static_cast<Task*>(ptr);
-        if (t->is_sort) {
-            sort_records(g_base + t->left, t->right - t->left + 1);
-        } else {
-            merge_records(g_base, t->left, t->mid, t->right);
-        }
-        return t->parent; // may be nullptr (root)
-    }
-};
-
-/*---------------------------------------------------------------------------*/
-/*  Main driver                                                               */
-/*---------------------------------------------------------------------------*/
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     Params opt = parse_argv(argc, argv);
+
     const std::size_t N      = opt.n_records;
-    const std::size_t cutoff = opt.cutoff > 0 ? opt.cutoff : 8192;
+    const std::size_t cutoff = opt.cutoff ? opt.cutoff : 8192;
     const int nthreads       = opt.n_threads > 0 ? opt.n_threads : ff_numCores();
 
     Record* data = alloc_random_records(N, opt.payload_max);
     g_base        = data;
 
-    /* Build task graph ------------------------------------------------------*/
-    std::vector<Task*> leaves;           // tasks ready at time‑0
-    std::vector<Task*> pool;             // to own all Task pointers for cleanup
-    Task* root = build_tasks(0, N - 1, nullptr, cutoff, leaves, pool);
+    // Build task DAG
+    std::vector<Task*> ready;     // leaves ready to run
+    std::vector<Task*> arena;     // all tasks for later delete
+    Task* root = build_tasks(0, N - 1, nullptr, cutoff, ready, arena);
+    (void)root;                   // used for termination only
 
-    /* FastFlow farm with feedback -------------------------------------------*/
-    Emitter E(leaves);
-    std::vector<std::unique_ptr<ff_node>> W;
-    for (int i = 0; i < nthreads; ++i) W.emplace_back(std::make_unique<Worker>());
+    // FastFlow farm
+    Emitter emitter(ready);
 
-    ff_Farm<> farm;
-    farm.add_emitter(&E);
-    farm.add_workers(W);
-    farm.wrap_around();      // enable feedback channel (workers → emitter)
-    farm.remove_collector(); // no collector stage
+    std::vector<ff_node*> workers;
+    workers.reserve(nthreads);
+    for (int i = 0; i < nthreads; ++i)
+        workers.push_back(new Worker());
 
-    bench_start("fastflow");
+    ff_farm farm;
+    farm.add_emitter(&emitter);
+    farm.add_workers(workers);
+    farm.remove_collector();
+    farm.wrap_around();
+    farm.set_scheduling_ondemand(2); // 2‑slot ondemand (good default)
+
+    BENCH_START(parallel_fastflow_merge_sort);
     if (farm.run_and_wait_end() < 0) {
-        error("FastFlow farm run failed\n");
+        error("FastFlow execution failed\n");
         return 1;
     }
-    bench_end("fastflow");
+    BENCH_STOP(parallel_fastflow_merge_sort);
 
     check_if_sorted(data, N);
 
-    /* Clean up --------------------------------------------------------------*/
-    for (Task* t : pool) delete t;
+    // Release resources
+    for (auto* w : workers) delete w;
+    for (Task* t : arena) delete t;
     release_records(data, N);
     return 0;
 }
