@@ -55,7 +55,7 @@ int main(int argc, char** argv)
 
     Record* data = alloc_random_records(opt.n_records, opt.payload_max);
 
-    const int cutoff = 10'000;           // task granularity
+    const std::size_t cutoff = opt.cutoff;           // task granularity
 
     BENCH_START(parallel_merge_sort);
     #pragma omp parallel

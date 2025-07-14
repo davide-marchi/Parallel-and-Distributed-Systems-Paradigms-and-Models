@@ -20,6 +20,7 @@ struct Params {
     std::size_t   n_records   = 1'000'000;  // -n
     std::uint32_t payload_max = 256;        // -p
     int           n_threads   = 0;          // -t   (0 => use hw_concurrency)
+    std::size_t   cutoff      = 10'000;      // -c   task-size threshold
 };
 
 /*---------------------------------------------------------------------------*/
@@ -57,6 +58,7 @@ static inline Params parse_argv(int argc, char** argv)
         {"records",    required_argument, nullptr, 'n'},
         {"payload",    required_argument, nullptr, 'p'},
         {"threads",    required_argument, nullptr, 't'},
+        {"cutoff",     required_argument, nullptr, 'c'},
         {"help",       no_argument,       nullptr, 'h'},
         {nullptr,      0,                 nullptr,  0 }
     };
@@ -74,6 +76,13 @@ static inline Params parse_argv(int argc, char** argv)
                 }
                 break;
             case 't': opt.n_threads   = std::atoi(optarg); break;
+            case 'c':
+                opt.cutoff = std::strtoull(optarg, nullptr, 10);
+                if (opt.cutoff == 0) {
+                    std::fprintf(stderr, "Error: --cutoff must be > 0\n");
+                    std::exit(1);
+                }
+                break;
             case 'h':
             default:
                 std::fprintf(stderr,
@@ -81,6 +90,7 @@ static inline Params parse_argv(int argc, char** argv)
                     "  -n, --records N      number of records (default 1e6)\n"
                     "  -p, --payload B      maximum payload size in bytes (default 256)\n"
                     "  -t, --threads T      threads to use (0 = hw concurrency)\n"
+                    "  -c, --cutoff  N      task cutoff size    (default 10000)\n"
                     "  -h, --help           show this help\n", argv[0]);
                 std::exit(c == 'h' ? 0 : 1);
         }
