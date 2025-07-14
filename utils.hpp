@@ -184,5 +184,13 @@ static inline void merge_into_dest(const Record*  a,   std::size_t na,
 }
 */
 
+static inline void merge_records(Record* base, std::size_t left, std::size_t mid, std::size_t right)
+{
+    std::inplace_merge(base + left,           // first half begin
+                       base + mid + 1,        // second half begin
+                       base + right + 1,      // range end (one-past-last)
+                       [](const Record& a, const Record& b) { return a.key < b.key; });
+}
+
 /*---------------------------------------------------------------------------*/
 #endif /* UTILS_HPP */

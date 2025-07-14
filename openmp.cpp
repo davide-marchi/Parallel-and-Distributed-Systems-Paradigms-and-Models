@@ -31,16 +31,11 @@ static inline void mergesort_task(Record* base,
 
         #pragma omp taskwait
     } else {
-        mergesort_task(base, left,  mid,       cutoff);
-        mergesort_task(base, mid+1, right,     cutoff);
+        sort_records(base + left, right - left + 1); // Use sort_records for base case
     }
 
     /* merge the two sorted halves in-place -------------------------------*/
-    std::inplace_merge(base + left,           // first  half begin
-                       base + mid + 1,        // second half begin
-                       base + right + 1,      // range end (one-past-last)
-                       [](const Record& a, const Record& b)
-                       { return a.key < b.key; });
+    merge_records(base, left, mid, right); // Use merge_records wrapper
 }
 
 /*-------------------------------------------------------------------------*/
