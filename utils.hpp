@@ -154,6 +154,7 @@ static inline void dump_records(const Record* base, std::size_t n, std::size_t m
 /*---------------------------------------------------------------------------*/
 /* 7.  Merge two sorted runs into an arbitrary destination using a temp arr  */
 /*---------------------------------------------------------------------------*/
+/*
 static inline void merge_into_dest(const Record*  a,   std::size_t na,
                                    const Record*  b,   std::size_t nb,
                                    Record*        dest,
@@ -161,16 +162,17 @@ static inline void merge_into_dest(const Record*  a,   std::size_t na,
 {
     const std::size_t n_total = na + nb;
 
-    /* ---- merge into the scratch buffer --------------------------------- */
+    // ---- merge into the scratch buffer ---------------------------------
     std::size_t i = 0, j = 0, k = 0;
     while (i < na && j < nb)
         scratch[k++] = (a[i].key <= b[j].key) ? a[i++] : b[j++];
     while (i < na)  scratch[k++] = a[i++];
     while (j < nb)  scratch[k++] = b[j++];
 
-    /* ---- copy back into destination ------------------------------------ */
+    // ---- copy back into destination ------------------------------------
     std::memcpy(dest, scratch, n_total * sizeof(Record));
 }
+*/
 
 /*---------------------------------------------------------------------------*/
 #endif /* UTILS_HPP */

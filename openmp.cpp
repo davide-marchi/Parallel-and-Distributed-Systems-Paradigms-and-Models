@@ -9,19 +9,15 @@
 
 #include "utils.hpp"
 #include <omp.h>
-#include <cstring>    // std::memcpy
 
-
-/* one reusable buffer per OpenMP thread */
-static thread_local std::vector<Record> tls_buf;
 
 /*-------------------------------------------------------------------------*/
 /*  Recursive task-parallel MergeSort                                      */
 /*-------------------------------------------------------------------------*/
-static void mergesort_task(Record* base,
-                           std::size_t left,
-                           std::size_t right,
-                           int cutoff)
+static inline void mergesort_task(Record* base,
+                                  std::size_t left,
+                                  std::size_t right,
+                                  int cutoff)
 {
     if (left >= right) return;
     std::size_t mid = (left + right) / 2;
@@ -39,13 +35,12 @@ static void mergesort_task(Record* base,
         mergesort_task(base, mid+1, right,     cutoff);
     }
 
-    std::size_t n_total = right - left + 1;
-    if (tls_buf.size() < n_total) tls_buf.resize(n_total);
-
-    merge_into_dest(base + left,  mid - left + 1,
-                    base + mid+1, right - mid,
-                    base + left,
-                    tls_buf.data());
+    /* merge the two sorted halves in-place -------------------------------*/
+    std::inplace_merge(base + left,           // first  half begin
+                       base + mid + 1,        // second half begin
+                       base + right + 1,      // range end (one-past-last)
+                       [](const Record& a, const Record& b)
+                       { return a.key < b.key; });
 }
 
 /*-------------------------------------------------------------------------*/
@@ -66,7 +61,7 @@ int main(int argc, char** argv)
     #pragma omp parallel
     {
         #pragma omp single nowait
-        mergesort_task(data, 0, opt.n_records - 1, cutoff);   // ← 4 args
+        mergesort_task(data, 0, opt.n_records - 1, cutoff);
     }
     BENCH_STOP(parallel_merge_sort);
 
