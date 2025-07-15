@@ -16,8 +16,6 @@
 #include <ff/farm.hpp>
 #include "utils.hpp"
 #include <vector>
-#include <atomic>
-#include <iostream>
 
 using namespace ff;
 
@@ -38,10 +36,8 @@ struct Emitter : ff_node_t<Task> {
     Emitter(std::size_t N, std::size_t cutoff) : N(N), cutoff(cutoff) {}
 
     Task* svc(Task* in) override {
-        if (!started) {                     // first activation
-            started = true;
+        if (in == nullptr)             // FastFlow’s wake-up dummy
             return GO_ON;
-        }
 
         if (!in->is_ready){             // first children done
             in->is_ready = true; // mark as ready when returnd again
@@ -62,7 +58,6 @@ struct Emitter : ff_node_t<Task> {
     }
 
 private:
-    bool started = false;
     std::size_t N;
     std::size_t cutoff;
 };
