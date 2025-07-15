@@ -99,12 +99,15 @@ int main(int argc, char** argv) {
     Record* data = alloc_random_records(N, p.payload_max);
     g_base = data;
 
+    BENCH_START(build_tasks);
     std::vector<Task*> leaves;
     build_tasks(0, N - 1, nullptr, cutoff, leaves); // root auto‑freed
+    BENCH_STOP(build_tasks);
 
+    BENCH_START(ff_farm_sort);
     Emitter emitter(leaves);
     std::vector<ff_node*> workers;
-    for (int i = 0; i < nthreads; ++i) workers.push_back(new Worker());
+    for (int i = 0; i < nthreads - 1; ++i) workers.push_back(new Worker());
 
     ff_farm farm;
     farm.add_emitter(&emitter);
@@ -116,6 +119,7 @@ int main(int argc, char** argv) {
         error("FastFlow execution failed\n");
         return 1;
     }
+    BENCH_STOP(ff_farm_sort);
 
     check_if_sorted(data, N);
 
