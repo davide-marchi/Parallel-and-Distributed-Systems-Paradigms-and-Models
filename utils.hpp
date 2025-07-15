@@ -64,7 +64,7 @@ static inline Params parse_argv(int argc, char** argv)
     };
 
     int c;
-    while ((c = getopt_long(argc, argv, "n:p:t:qc h", long_opts, nullptr)) != -1) {
+    while ((c = getopt_long(argc, argv, "n:p:t:c:h", long_opts, nullptr)) != -1) {
         switch (c) {
             case 'n': opt.n_records   = std::strtoull(optarg, nullptr, 10); break;
             case 'p':
@@ -102,7 +102,7 @@ static inline Params parse_argv(int argc, char** argv)
 /* 5.  Data generation & release                                             */
 /*---------------------------------------------------------------------------*/
 static inline Record* alloc_random_records(std::size_t n, std::uint32_t payload_max,
-                                           unsigned int seed = static_cast<unsigned int>(time(nullptr)))
+                                           unsigned int seed = 42)
 {
     std::mt19937                     rng(seed);
     std::uniform_int_distribution<>  key_gen(0, INT32_MAX);
