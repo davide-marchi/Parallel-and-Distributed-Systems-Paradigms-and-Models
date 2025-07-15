@@ -25,7 +25,7 @@ struct Task {
     std::size_t left, mid, right;
     bool        is_sort;
     Task*       parent;            // nullptr only for root
-    std::atomic<int> remain{0};    // merge nodes: children left
+    bool        is_ready = false;  // for feedback
 };
 
 static Record* g_base = nullptr;
@@ -41,7 +41,6 @@ static Task* build_tasks(std::size_t l, std::size_t r, Task* parent,
     }
     std::size_t m = (l + r) / 2;
     t->mid    = m;
-    t->remain = 2;
     build_tasks(l,   m, t, cutoff, ready);
     build_tasks(m+1, r, t, cutoff, ready);
     return t;
@@ -72,13 +71,14 @@ struct Emitter : ff_node_t<Task> {
             return GO_ON;
         }
 
-        if (--in->remain == 0){             // both children done
+        if (in->is_ready){             // both children done
             Task* parent = in->parent;
             ff_send_out(in);               // schedule merge
             if (!parent) { // root task enqueued
                 return EOS;  // send EOS downstream
             }
         }
+        in->is_ready = true; // mark as ready when returnd again
         return GO_ON;
     }
 
