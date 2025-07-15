@@ -8,7 +8,7 @@
 //  • No extra sentinel, no global variables, no arena.
 // -----------------------------------------------------------------------------
 //  Build:
-//      g++ -std=c++17 -O2 -Wall -ffast-math -pthread -I./fastflow \
+//      g++ -std=c++17 -O2 -Wall -ffast-math -pthread -I./fastflow
 //          fastflow.cpp utils.o -o bin/fastflow
 // -----------------------------------------------------------------------------
 
@@ -28,23 +28,62 @@ struct Task {
     bool        is_ready = false;  // for feedback
 };
 
+struct Emitter;                       // forward-declare
+static Task* build_tasks(std::size_t, std::size_t, Task*, std::size_t, Emitter*);
+
 static Record* g_base = nullptr;
+
+/* Emitter -----------------------------------------------------------------*/
+struct Emitter : ff_node_t<Task> {
+    Emitter(std::size_t N, std::size_t cutoff) : N(N), cutoff(cutoff) {}
+
+    Task* svc(Task* in) override {
+        if (!started) {                     // first activation
+            started = true;
+            return GO_ON;
+        }
+
+        if (!in->is_ready){             // first children done
+            in->is_ready = true; // mark as ready when returnd again
+        }
+        else {
+            Task* parent = in->parent;
+            ff_send_out(in);               // schedule merge
+            if (!parent) { // root task enqueued
+                return EOS;  // send EOS downstream
+            }
+        }
+        return GO_ON;
+    }
+
+    int svc_init() override {
+        build_tasks(0, N - 1, nullptr, cutoff, this); // root auto‑freed
+        return 0;
+    }
+
+private:
+    bool started = false;
+    std::size_t N;
+    std::size_t cutoff;
+};
 
 /* Build full binary task tree ---------------------------------------------*/
 static Task* build_tasks(std::size_t l, std::size_t r, Task* parent,
-                         std::size_t cutoff, std::vector<Task*>& ready) {
+                         std::size_t cutoff, Emitter* emitter) {
     Task* t = new Task{l,0,r,false,parent};
     if (r - l + 1 <= cutoff) {          // leaf → sort directly
         t->is_sort = true;
-        ready.push_back(t);
+        emitter->ff_send_out(t);        // push leaf node directly
         return t;
     }
     std::size_t m = (l + r) / 2;
     t->mid    = m;
-    build_tasks(l,   m, t, cutoff, ready);
-    build_tasks(m+1, r, t, cutoff, ready);
+    build_tasks(l,   m, t, cutoff, emitter);
+    build_tasks(m+1, r, t, cutoff, emitter);
     return t;
 }
+
+
 
 /* Worker ------------------------------------------------------------------*/
 struct Worker : ff_node_t<Task> {
@@ -60,34 +99,6 @@ struct Worker : ff_node_t<Task> {
     }
 };
 
-/* Emitter -----------------------------------------------------------------*/
-struct Emitter : ff_node_t<Task> {
-    Emitter(const std::vector<Task*>& init) : initial(init) {}
-
-    Task* svc(Task* in) override {
-        if (!started) {                     // first activation: push leaves
-            started = true;
-            for (Task* t : initial) ff_send_out(t);
-            return GO_ON;
-        }
-
-        if (in->is_ready){             // both children done
-            Task* parent = in->parent;
-            ff_send_out(in);               // schedule merge
-            if (!parent) { // root task enqueued
-                return EOS;  // send EOS downstream
-            }
-        }
-        in->is_ready = true; // mark as ready when returnd again
-        return GO_ON;
-    }
-
-
-private:
-    bool started = false;
-    const std::vector<Task*>& initial;
-};
-
 /* Main --------------------------------------------------------------------*/
 int main(int argc, char** argv) {
     Params p = parse_argv(argc, argv);
@@ -99,13 +110,8 @@ int main(int argc, char** argv) {
     Record* data = alloc_random_records(N, p.payload_max);
     g_base = data;
 
-    BENCH_START(build_tasks);
-    std::vector<Task*> leaves;
-    build_tasks(0, N - 1, nullptr, cutoff, leaves); // root auto‑freed
-    BENCH_STOP(build_tasks);
-
     BENCH_START(ff_farm_sort);
-    Emitter emitter(leaves);
+    Emitter emitter(N, cutoff);
     std::vector<ff_node*> workers;
     for (int i = 0; i < nthreads - 1; ++i) workers.push_back(new Worker());
 
