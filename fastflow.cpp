@@ -27,7 +27,7 @@ struct Task {
 };
 
 struct Emitter;                       // forward-declare
-static Task* build_tasks(std::size_t, std::size_t, Task*, std::size_t, Emitter*);
+static void build_tasks(std::size_t, std::size_t, Task*, std::size_t, Emitter*);
 
 static Record* g_base = nullptr;
 
@@ -63,19 +63,16 @@ private:
 };
 
 /* Build full binary task tree ---------------------------------------------*/
-static Task* build_tasks(std::size_t l, std::size_t r, Task* parent,
-                         std::size_t cutoff, Emitter* emitter) {
-    Task* t = new Task{l,0,r,false,parent};
+static void build_tasks(std::size_t l, std::size_t r, Task* parent,
+                        std::size_t cutoff, Emitter* emitter) {
     if (r - l + 1 <= cutoff) {          // leaf → sort directly
-        t->is_sort = true;
-        emitter->ff_send_out(t);        // push leaf node directly
-        return t;
+        emitter->ff_send_out(new Task{l,0,r,true,parent});        // push leaf node directly
+        return;
     }
     std::size_t m = (l + r) / 2;
-    t->mid    = m;
+    Task* t = new Task{l,m,r,false,parent};
     build_tasks(l,   m, t, cutoff, emitter);
     build_tasks(m+1, r, t, cutoff, emitter);
-    return t;
 }
 
 

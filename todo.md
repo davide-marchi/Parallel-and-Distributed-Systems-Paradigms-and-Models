@@ -13,8 +13,5 @@ Fastflow
 - tweak scheduling and num threads
 - simplify task struct
     - remove is_sort! sorting condition can be calculated by the worker (offset could be worker private variable)
-    - optimize build_task
-        - operations inside contructor (inline)
-        - no return value
     - instead of left, mid and right can we have like pointer fo first element, to the mid one and total lenght?
         - would remove global variable but would reuire to change the merge_record()
