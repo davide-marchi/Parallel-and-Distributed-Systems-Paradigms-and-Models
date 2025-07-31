@@ -8,5 +8,8 @@
 # Ignore the fastflow folder
 fastflow/
 
+# Sorted and unsorted files
+files/
+
 # vscode
 .vscode/

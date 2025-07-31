@@ -28,30 +28,64 @@ static void fatal(const char* msg) {
 }
 
 //------------------------------------------------------------------------------
-//  Phase 1 – streaming generator                                               
+// Phase 1 – direct streaming generator
 //------------------------------------------------------------------------------
-static void generate_unsorted_file(const std::string& path,
-                                   std::size_t        total_n,
-                                   std::size_t        payload_max)
+static std::string generate_unsorted_file(std::size_t total_n,
+                                          std::uint32_t payload_max)
 {
-    std::ofstream fout(path, std::ios::binary | std::ios::trunc);
-    if (!fout) fatal("cannot create unsorted file");
+    // 1) ensure output folder
+    fs::create_directories("files");
 
-    constexpr std::size_t GEN_CHUNK = 1 << 20;  // generate 1 M records at a time
+    // 2) cache-keyed filename
+    std::string path = "files/unsorted_"
+                     + std::to_string(total_n) + "_"
+                     + std::to_string(payload_max) + ".bin";
 
-    std::size_t remaining = total_n;
-    while (remaining) {
-        std::size_t n = std::min(GEN_CHUNK, remaining);
-        Record* rec  = alloc_random_records(n, payload_max);
-
-        for (std::size_t i = 0; i < n; ++i) {
-            fout.write(reinterpret_cast<const char*>(&rec[i].key), sizeof rec[i].key);
-            fout.write(reinterpret_cast<const char*>(&rec[i].len), sizeof rec[i].len);
-            fout.write(rec[i].payload, rec[i].len);
-        }
-        release_records(rec, n);
-        remaining -= n;
+    // 3) skip if already exists
+    if (fs::exists(path)) {
+        std::cout << "Found existing unsorted file (“" << path 
+                  << "”) – skipping generation.\n";
+        return path;
     }
+
+    // 4) open for binary writing
+    std::ofstream fout(path, std::ios::binary | std::ios::trunc);
+    if (!fout) {
+        std::perror("opening unsorted file");
+        std::exit(1);
+    }
+
+    // 5) set up RNG & distributions
+    std::mt19937                      rng{42};
+    std::uniform_int_distribution<>  key_gen(0, INT32_MAX);
+    std::uniform_int_distribution<>  len_gen(8, payload_max);
+    std::uniform_int_distribution<>  byte_gen(0, 255);
+
+    // 6) one reusable buffer for payload bytes
+    std::vector<char> buffer;
+    buffer.reserve(payload_max);
+
+    std::cout << "Streaming-generating " << total_n 
+              << " records into “" << path << "”…\n";
+
+    // 7) generate-and-write loop
+    for (std::size_t i = 0; i < total_n; ++i) {
+        unsigned long key = static_cast<unsigned long>(key_gen(rng));
+        uint32_t len    = static_cast<uint32_t>(len_gen(rng));
+
+        // fill buffer[0..len)
+        buffer.resize(len);
+        for (uint32_t j = 0; j < len; ++j)
+            buffer[j] = static_cast<char>(byte_gen(rng));
+
+        // write key, len, payload
+        fout.write(reinterpret_cast<const char*>(&key), sizeof(key));
+        fout.write(reinterpret_cast<const char*>(&len),   sizeof(len));
+        fout.write(buffer.data(),                         len);
+    }
+
+    std::cout << "Unsorted file ready: “" << path << "”.\n";
+    return path;
 }
 
 //------------------------------------------------------------------------------
@@ -148,17 +182,8 @@ int main(int argc, char** argv)
 {
     Params opt = parse_argv(argc, argv);
 
-    const std::string unsorted_file = "records_unsorted.bin";
-    const std::string sorted_file   = "records_sorted.bin";
-
     // Phase 1 – streaming generation --------------------------------------
-    if (!fs::exists(unsorted_file)) {
-        std::cout << "Streaming‑generating " << opt.n_records << " records…\n";
-        generate_unsorted_file(unsorted_file, opt.n_records, opt.payload_max);
-        std::cout << "Unsorted file ready.\n";
-    } else {
-        std::cout << "Found existing unsorted file – skipping generation.\n";
-    }
+    std::string unsorted_file = generate_unsorted_file(opt.n_records, opt.payload_max);
 
     // Phase 2 – build index ------------------------------------------------
     BENCH_START(build_index);
@@ -172,12 +197,16 @@ int main(int argc, char** argv)
 
     // Phase 4 – rewrite sorted file ---------------------------------------
     BENCH_START(rewrite_sorted);
-    rewrite_sorted(unsorted_file, sorted_file, index);
+    rewrite_sorted(unsorted_file, "files/sorted_"
+                     + std::to_string(opt.n_records) + "_"
+                     + std::to_string(opt.payload_max) + ".bin", index);
     BENCH_STOP(rewrite_sorted);
 
     // Phase 5 – verify -----------------------------------------------------
     std::cout << "Verifying output…\n";
-    if (!file_is_sorted(sorted_file)) fatal("output NOT sorted");
+    if (!file_is_sorted("files/sorted_"
+                     + std::to_string(opt.n_records) + "_"
+                     + std::to_string(opt.payload_max) + ".bin")) fatal("output NOT sorted");
     std::cout << "Success: sorted file is in order.\n";
     return 0;
 }
