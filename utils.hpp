@@ -12,6 +12,7 @@
 #include <chrono>
 #include <memory>     // std::unique_ptr
 #include <cstring>    // std::memcpy
+#include <string>      // for std::stoull, std::stoul
 
 /*---------------------------------------------------------------------------*/
 /* 1.  Run-time parameters                                                   */
@@ -19,8 +20,8 @@
 struct Params {
     std::size_t   n_records   = 1'000'000;  // -n
     std::uint32_t payload_max = 256;        // -p
-    int           n_threads   = 0;          // -t   (0 => use hw_concurrency)
-    std::size_t   cutoff      = 10'000;      // -c   task-size threshold
+    std::size_t   n_threads   = 0;          // -t   (0 => use hw_concurrency)
+    std::size_t   cutoff      = 10'000;     // -c   task-size threshold
 };
 
 /*---------------------------------------------------------------------------*/
@@ -52,7 +53,7 @@ struct Record {
 /*---------------------------------------------------------------------------*/
 static inline Params parse_argv(int argc, char** argv)
 {
-    Params opt;
+    Params opt{};
 
     static const struct option long_opts[] = {
         {"records",    required_argument, nullptr, 'n'},
@@ -66,20 +67,57 @@ static inline Params parse_argv(int argc, char** argv)
     int c;
     while ((c = getopt_long(argc, argv, "n:p:t:c:h", long_opts, nullptr)) != -1) {
         switch (c) {
-            case 'n': opt.n_records   = std::strtoull(optarg, nullptr, 10); break;
-            case 'p':
-                opt.payload_max = static_cast<std::uint32_t>(std::strtoul(optarg,nullptr,10));
-                if (opt.payload_max < 8) {
-                    std::fprintf(stderr,
-                        "Error: --payload must be ≥ 8 (got %u)\n", opt.payload_max);
+            case 'n':
+                try {
+                    opt.n_records = std::stoull(optarg);
+                } catch (const std::invalid_argument& e) {
+                    std::fprintf(stderr, "Error: --records not a number (%s)\n", optarg);
+                    std::exit(1);
+                } catch (const std::out_of_range& e) {
+                    std::fprintf(stderr, "Error: --records out of range (%s)\n", optarg);
+                    std::exit(1);
+                }
+                if (opt.n_records <= 0) {
+                    std::fprintf(stderr, "Error: --records must be > 0 (got %zu)\n", opt.n_records);
                     std::exit(1);
                 }
                 break;
-            case 't': opt.n_threads   = std::atoi(optarg); break;
+            case 'p':
+                try {
+                    auto v = std::stoul(optarg);
+                    opt.payload_max = static_cast<std::uint32_t>(v);
+                } catch (const std::exception&) {
+                    std::fprintf(stderr, "Error: --payload not a number (%s)\n", optarg);
+                    std::exit(1);
+                }
+                if (opt.payload_max < 8 || opt.payload_max > 256) {
+                    std::fprintf(stderr, "Error: --payload must be ≥ 8 and ≤ 256 (got %u)\n", opt.payload_max);
+                    std::exit(1);
+                }
+                break;
+            case 't':
+                try {
+                    opt.n_threads = std::stoull(optarg);
+                } catch (const std::invalid_argument&) {
+                    std::fprintf(stderr, "Error: --threads not a number (%s)\n", optarg);
+                    std::exit(1);
+                } catch (const std::out_of_range&) {
+                    std::fprintf(stderr, "Error: --threads out of range (%s)\n", optarg);
+                    std::exit(1);
+                }
+                break;
             case 'c':
-                opt.cutoff = std::strtoull(optarg, nullptr, 10);
-                if (opt.cutoff == 0) {
-                    std::fprintf(stderr, "Error: --cutoff must be > 0\n");
+                try {
+                    opt.cutoff = std::stoull(optarg);
+                } catch (const std::invalid_argument&) {
+                    std::fprintf(stderr, "Error: --cutoff not a number (%s)\n", optarg);
+                    std::exit(1);
+                } catch (const std::out_of_range&) {
+                    std::fprintf(stderr, "Error: --cutoff out of range (%s)\n", optarg);
+                    std::exit(1);
+                }
+                if (opt.cutoff <= 0) {
+                    std::fprintf(stderr, "Error: --cutoff must be > 0 (got %zu)\n", opt.cutoff);
                     std::exit(1);
                 }
                 break;
