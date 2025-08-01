@@ -236,18 +236,47 @@ rewrite_sorted_mmap(const std::string& in_path,
 //------------------------------------------------------------------------------
 //  Verification                                                                
 //------------------------------------------------------------------------------
-static bool file_is_sorted(const std::string& path)
+static bool check_if_sorted_mmap(const std::string& path,
+                     std::size_t        total_n)
 {
-    std::ifstream fin(path, std::ios::binary);
-    if (!fin) return false;
+    int fd = ::open(path.c_str(), O_RDONLY);
+    if (fd < 0) { perror("open"); return false; }
 
-    uint64_t prev_key = 0, key;  uint32_t len; bool first = true;
-    while (fin.read(reinterpret_cast<char*>(&key), sizeof key)) {
-        fin.read(reinterpret_cast<char*>(&len), sizeof len);
-        fin.seekg(len, std::ios::cur);
-        if (!first && key < prev_key) return false;
-        prev_key = key; first = false;
+    struct stat st;
+    if (fstat(fd, &st) < 0) { perror("fstat"); close(fd); return false; }
+    size_t sz = st.st_size;
+
+    char* map = (char*)mmap(nullptr, sz,
+                            PROT_READ, MAP_SHARED, fd, 0);
+    if (map == MAP_FAILED) { perror("mmap"); close(fd); return false; }
+
+    size_t pos = 0;
+    unsigned long prev_key = 0;
+    for (size_t i = 0; i < total_n; ++i) {
+        if (pos + sizeof(unsigned long)+sizeof(uint32_t) > sz) {
+            std::cerr << "Unexpected EOF at record " << i << "\n";
+            munmap(map, sz);
+            close(fd);
+            return false;
+        }
+
+        unsigned long key = *reinterpret_cast<unsigned long*>(map + pos);
+        uint32_t      len = *reinterpret_cast<uint32_t*>     (map + pos + sizeof(unsigned long));
+
+        if (i > 0 && key < prev_key) {
+            std::cerr << "Out of order at record " << i
+                      << ": " << key << " < " << prev_key << "\n";
+            munmap(map, sz);
+            close(fd);
+            return false;
+        }
+        prev_key = key;
+        pos += sizeof(unsigned long) + sizeof(uint32_t) + len;
     }
+
+    munmap(map, sz);
+    close(fd);
+    std::cout << "File is sorted.\n";
     return true;
 }
 
@@ -286,12 +315,10 @@ int main(int argc, char** argv)
 
     // Phase 6 – verify -----------------------------------------------------
     std::cout << "Verifying output…\n";
-    if (!file_is_sorted("files/sorted_"
+    BENCH_START(check_if_sorted_mmap);
+    check_if_sorted_mmap("files/sorted_"
                      + std::to_string(opt.n_records) + "_"
-                     + std::to_string(opt.payload_max) + ".bin")) {
-        std::cerr << "[main] Error: output NOT sorted\n";
-    } else {
-        std::cout << "Success: sorted file is in order.\n";
-    }
+                     + std::to_string(opt.payload_max) + ".bin", opt.n_records);
+    BENCH_STOP(check_if_sorted_mmap);
     return 0;
 }
