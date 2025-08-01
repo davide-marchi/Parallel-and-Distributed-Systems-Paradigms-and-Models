@@ -1,0 +1,38 @@
+Pre optimizations - Unoptimized
+
+./bin/sequential -n 10000000 -p 8
+Found existing unsorted file (“files/unsorted_10000000_8.bin”) – skipping generation.
+[build_index] N=10000000  index=228 MiB
+[build_index         ]  17038.756 ms
+[sort_records        ]    675.440 ms
+[rewrite_sorted      ]  21761.631 ms
+
+./bin/sequential -n 10000000 -p 256
+Found existing unsorted file (“files/unsorted_10000000_256.bin”) – skipping generation.
+[build_index] N=10000000  index=228 MiB
+[build_index         ]  17073.598 ms
+[sort_records        ]    687.967 ms
+[rewrite_sorted      ]  27419.140 ms
+
+
+###################################
+
+Slight optimization: Reduced reads during rewrite_sorted (no buffers, no mmap)
+
+./bin/sequential -n 10000000 -p 8
+Found existing unsorted file (“files/unsorted_10000000_8.bin”) – skipping generation.
+[build_index         ]  16659.376 ms
+[sort_records        ]    680.792 ms
+[rewrite_sorted      ]  21817.740 ms
+Verifying output…
+Success: sorted file is in order
+
+./bin/sequential -n 10000000 -p 256
+Found existing unsorted file (“files/unsorted_10000000_256.bin”) – skipping generation.
+[build_index         ]  16840.329 ms
+[sort_records        ]    689.877 ms
+[rewrite_sorted      ]  27437.464 ms
+Verifying output…
+Success: sorted file is in order.
+
+###################################

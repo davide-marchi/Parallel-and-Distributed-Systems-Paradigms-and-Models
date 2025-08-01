@@ -1,15 +1,3 @@
-// sequential_external.cpp – Streaming generator + external sort
-// -----------------------------------------------------------------------------
-// Phases (each keeps memory use bounded):
-//   1) **Streaming generation** – create records_unsorted.bin without ever
-//      holding all records in RAM.  We allocate ≤GEN_CHUNK records at a time,
-//      dump them, and free.
-//   2) Build an in‑RAM index (key + offset) – fits as long as 16 B·N < RAM.
-//   3) Use existing sort_records() on that index.
-//   4) Rewrite the sorted file by streaming payloads.
-//   5) Verify ordering with a one‑pass scan.
-// -----------------------------------------------------------------------------
-
 #include "utils.hpp"
 
 #include <algorithm>
@@ -20,12 +8,6 @@
 #include <vector>
 #include <cstdio>
 
-namespace fs = std::filesystem;
-
-static void fatal(const char* msg) {
-    std::cerr << "[external_sort] " << msg << "\n";
-    std::exit(EXIT_FAILURE);
-}
 
 //------------------------------------------------------------------------------
 // Phase 1 – direct streaming generator
@@ -34,7 +16,7 @@ static std::string generate_unsorted_file(std::size_t total_n,
                                           std::uint32_t payload_max)
 {
     // 1) ensure output folder
-    fs::create_directories("files");
+    std::filesystem::create_directories("files");
 
     // 2) cache-keyed filename
     std::string path = "files/unsorted_"
@@ -42,7 +24,7 @@ static std::string generate_unsorted_file(std::size_t total_n,
                      + std::to_string(payload_max) + ".bin";
 
     // 3) skip if already exists
-    if (fs::exists(path)) {
+    if (std::filesystem::exists(path)) {
         std::cout << "Found existing unsorted file (“" << path 
                   << "”) – skipping generation.\n";
         return path;
@@ -91,71 +73,121 @@ static std::string generate_unsorted_file(std::size_t total_n,
 //------------------------------------------------------------------------------
 //  Phase 2 – build index (key + offset)                                        
 //------------------------------------------------------------------------------
-struct OffsetRec : Record { /* inherits key, len, payload ptr */ };
+struct IndexRec {
+    unsigned long key;  // same as in Record
+    uint64_t      offset; 
+    uint32_t      len;     // payload length
+};
 
-static std::vector<Record> build_index(const std::string& input_path)
+/**
+ * build_index
+ *  - input_path: path to the unsorted binary file
+ *  - total_n:     the exact number of records you expect
+ * Returns a malloc'd array of IndexRec (length total_n), or nullptr on error.
+ * Caller must free()
+ */
+static IndexRec* build_index(const std::string& input_path,
+            std::size_t total_n)
 {
     std::ifstream fin(input_path, std::ios::binary);
-    if (!fin) fatal("cannot open input file");
-
-    std::vector<Record> idx;
-    idx.reserve(1 << 20);
-
-    while (true) {
-        std::streampos pos = fin.tellg();
-        if (pos == -1) break;
-
-        uint64_t key;  uint32_t len;
-        if (!fin.read(reinterpret_cast<char*>(&key), sizeof key)) break;
-        if (!fin.read(reinterpret_cast<char*>(&len), sizeof len))
-            fatal("truncated header while building index");
-
-        Record stub{};
-        stub.key     = key;
-        stub.len     = 0;
-        stub.payload = reinterpret_cast<char*>(static_cast<uint64_t>(pos));
-        idx.push_back(stub);
-
-        fin.seekg(len, std::ios::cur);
-        if (!fin) fatal("truncated payload while building index");
+    if (!fin) {
+        std::cerr << "[build_index] Error: cannot open “"
+                  << input_path << "”.\n";
+        return nullptr;
     }
 
-    std::cout << "[build_index] N=" << idx.size() << "  index="
-              << (idx.size() * sizeof(Record) / (1024 * 1024)) << " MiB\n";
+    // allocate exact‐size index array
+    IndexRec* idx = static_cast<IndexRec*>(
+                        std::malloc(total_n * sizeof(IndexRec)));
+    if (!idx) {
+        std::cerr << "[build_index] Error: malloc(" 
+                  << total_n * sizeof(IndexRec) 
+                  << ") failed.\n";
+        return nullptr;
+    }
+
+    for (std::size_t i = 0; i < total_n; ++i) {
+        std::streampos pos = fin.tellg();
+        if (pos < 0) {
+            std::cerr << "[build_index] Unexpected EOF before record "
+                      << i << "\n";
+            std::free(idx);
+            return nullptr;
+        }
+
+        unsigned long key;
+        uint32_t      len;
+        if (!fin.read(reinterpret_cast<char*>(&key), sizeof key)
+         || !fin.read(reinterpret_cast<char*>(&len), sizeof len))
+        {
+            std::cerr << "[build_index] Truncated header at record "
+                      << i << "\n";
+            std::free(idx);
+            return nullptr;
+        }
+
+        idx[i].key    = key;
+        idx[i].offset = static_cast<uint64_t>(pos);
+        idx[i].len    = len;
+
+        // skip payload in one go
+        fin.seekg(len, std::ios::cur);
+        if (!fin) {
+            std::cerr << "[build_index] Truncated payload at record "
+                      << i << "\n";
+            std::free(idx);
+            return nullptr;
+        }
+    }
+
     return idx;
 }
+
 
 //------------------------------------------------------------------------------
 //  Phase 4 – rewrite sorted file                                               
 //------------------------------------------------------------------------------
-static void rewrite_sorted(const std::string& input_path,
-                           const std::string& output_path,
-                           const std::vector<Record>& sorted_idx)
+static bool rewrite_sorted(const std::string& in_path,
+               const std::string& out_path,
+               IndexRec*          idx,
+               std::size_t        n_idx,
+               std::size_t        payload_max = 256)
 {
-    std::ifstream fin(input_path, std::ios::binary);
-    if (!fin) fatal("cannot reopen input file");
-
-    std::ofstream fout(output_path, std::ios::binary | std::ios::trunc);
-    if (!fout) fatal("cannot create sorted output file");
-
-    std::vector<char> buf(1 << 20);
-
-    for (const Record& r : sorted_idx) {
-        uint64_t offset = reinterpret_cast<uint64_t>(r.payload);
-        fin.seekg(offset);
-
-        uint64_t key;  uint32_t len;
-        fin.read(reinterpret_cast<char*>(&key), sizeof key);
-        fin.read(reinterpret_cast<char*>(&len), sizeof len);
-
-        if (len > buf.size()) buf.resize(len);
-        fin.read(buf.data(), len);
-
-        fout.write(reinterpret_cast<char*>(&key), sizeof key);
-        fout.write(reinterpret_cast<char*>(&len), sizeof len);
-        fout.write(buf.data(), len);
+    std::ifstream fin(in_path,  std::ios::binary);
+    if (!fin) {
+        std::cerr << "[rewrite_sorted] Error: cannot open input file “" << in_path << "”.\n";
+        return false;
     }
+
+    std::ofstream fout(out_path, std::ios::binary | std::ios::trunc);
+    if (!fout) {
+        std::cerr << "[rewrite_sorted] Error: cannot create sorted output file “" << out_path << "”.\n";
+        return false;
+    }
+
+    // Max payload possible working buffer
+    std::vector<char> buf(payload_max);
+
+    for (std::size_t i = 0; i < n_idx; ++i) {
+        const IndexRec& r = idx[i];
+
+        // seek straight to the payload
+        uint64_t payload_pos = r.offset
+                             + sizeof(r.key)
+                             + sizeof(r.len);
+        fin.seekg(payload_pos, std::ios::beg);
+
+        fin.read(buf.data(), r.len);
+
+        // write from our in-memory index + buf
+        fout.write(reinterpret_cast<const char*>(&r.key), sizeof(r.key));
+        fout.write(reinterpret_cast<const char*>(&r.len), sizeof(r.len));
+        fout.write(buf.data(),                         r.len);
+    }
+
+    return true;
 }
+
 
 //------------------------------------------------------------------------------
 //  Verification                                                                
@@ -187,26 +219,35 @@ int main(int argc, char** argv)
 
     // Phase 2 – build index ------------------------------------------------
     BENCH_START(build_index);
-    std::vector<Record> index = build_index(unsorted_file);
+    IndexRec*   idx   = build_index(unsorted_file, opt.n_records);
     BENCH_STOP(build_index);
 
     // Phase 3 – sort index in RAM -----------------------------------------
     BENCH_START(sort_records);
-    sort_records(index.data(), index.size());
+    std::sort(idx, idx + opt.n_records,
+          [](const IndexRec& a, const IndexRec& b) {
+              return a.key < b.key;
+          });
     BENCH_STOP(sort_records);
 
     // Phase 4 – rewrite sorted file ---------------------------------------
     BENCH_START(rewrite_sorted);
     rewrite_sorted(unsorted_file, "files/sorted_"
                      + std::to_string(opt.n_records) + "_"
-                     + std::to_string(opt.payload_max) + ".bin", index);
+                     + std::to_string(opt.payload_max) + ".bin", idx, opt.n_records, opt.payload_max);
     BENCH_STOP(rewrite_sorted);
 
-    // Phase 5 – verify -----------------------------------------------------
+    // Phase 5 – free index ------------------------------------------------
+    std::free(idx);
+
+    // Phase 6 – verify -----------------------------------------------------
     std::cout << "Verifying output…\n";
     if (!file_is_sorted("files/sorted_"
                      + std::to_string(opt.n_records) + "_"
-                     + std::to_string(opt.payload_max) + ".bin")) fatal("output NOT sorted");
-    std::cout << "Success: sorted file is in order.\n";
+                     + std::to_string(opt.payload_max) + ".bin")) {
+        std::cerr << "[main] Error: output NOT sorted\n";
+    } else {
+        std::cout << "Success: sorted file is in order.\n";
+    }
     return 0;
 }
