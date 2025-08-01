@@ -8,13 +8,6 @@
 #include <vector>
 #include <cstdio>
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <cstdlib>
-#include <string>
-
 
 //------------------------------------------------------------------------------
 // Phase 1 – direct streaming generator
@@ -87,76 +80,65 @@ struct IndexRec {
 };
 
 /**
- * build_index_mmap
- *  - in_path:   path to the unsorted file
- *  - total_n:   expected number of records
- * Returns a malloc’d IndexRec[total_n], or nullptr on error.
+ * build_index
+ *  - input_path: path to the unsorted binary file
+ *  - total_n:     the exact number of records you expect
+ * Returns a malloc'd array of IndexRec (length total_n), or nullptr on error.
+ * Caller must free()
  */
-static IndexRec*
-build_index_mmap(const std::string& in_path,
-                 std::size_t        total_n)
+static IndexRec* build_index(const std::string& input_path,
+            std::size_t total_n)
 {
-    // 1) open & stat
-    int fd = ::open(in_path.c_str(), O_RDONLY);
-    if (fd < 0) {
-        std::perror("[build_index_mmap] open");
+    std::ifstream fin(input_path, std::ios::binary);
+    if (!fin) {
+        std::cerr << "[build_index] Error: cannot open “"
+                  << input_path << "”.\n";
         return nullptr;
     }
-    struct stat st;
-    if (fstat(fd, &st) < 0) {
-        std::perror("[build_index_mmap] fstat");
-        close(fd);
-        return nullptr;
-    }
-    size_t file_sz = st.st_size;
 
-    // 2) mmap entire file
-    void* map = mmap(nullptr, file_sz,
-                     PROT_READ, MAP_SHARED, fd, 0);
-    if (map == MAP_FAILED) {
-        std::perror("[build_index_mmap] mmap");
-        close(fd);
-        return nullptr;
-    }
-    const char* data = static_cast<const char*>(map);
-
-    // 3) allocate exact‐size index array
+    // allocate exact‐size index array
     IndexRec* idx = static_cast<IndexRec*>(
                         std::malloc(total_n * sizeof(IndexRec)));
     if (!idx) {
-        std::cerr << "[build_index_mmap] malloc failed\n";
-        munmap(map, file_sz);
-        close(fd);
+        std::cerr << "[build_index] Error: malloc(" 
+                  << total_n * sizeof(IndexRec) 
+                  << ") failed.\n";
         return nullptr;
     }
 
-    // 4) one pass: parse each record in memory
-    size_t pos = 0;
-    for (size_t i = 0; i < total_n; ++i) {
-        if (pos + sizeof(unsigned long) + sizeof(uint32_t) > file_sz) {
-            std::cerr << "[build_index_mmap] unexpected EOF at rec " << i << "\n";
-            free(idx);
-            munmap(map, file_sz);
-            close(fd);
+    for (std::size_t i = 0; i < total_n; ++i) {
+        std::streampos pos = fin.tellg();
+        if (pos < 0) {
+            std::cerr << "[build_index] Unexpected EOF before record "
+                      << i << "\n";
+            std::free(idx);
             return nullptr;
         }
 
-        // read key & len from mapped memory
-        unsigned long key = *reinterpret_cast<const unsigned long*>(data + pos);
-        uint32_t      len = *reinterpret_cast<const uint32_t*>     (data + pos + sizeof(unsigned long));
+        unsigned long key;
+        uint32_t      len;
+        if (!fin.read(reinterpret_cast<char*>(&key), sizeof key)
+         || !fin.read(reinterpret_cast<char*>(&len), sizeof len))
+        {
+            std::cerr << "[build_index] Truncated header at record "
+                      << i << "\n";
+            std::free(idx);
+            return nullptr;
+        }
 
-        // record in index
         idx[i].key    = key;
-        idx[i].offset = pos;
+        idx[i].offset = static_cast<uint64_t>(pos);
         idx[i].len    = len;
 
-        // advance pos over header + payload
-        pos += sizeof(unsigned long) + sizeof(uint32_t) + len;
+        // skip payload in one go
+        fin.seekg(len, std::ios::cur);
+        if (!fin) {
+            std::cerr << "[build_index] Truncated payload at record "
+                      << i << "\n";
+            std::free(idx);
+            return nullptr;
+        }
     }
-
-    // 5) cleanup mmap (we still hold our own copy of offsets/lengths)
-    munmap(map, file_sz);
-    close(fd);
 
     return idx;
 }
@@ -165,70 +147,44 @@ build_index_mmap(const std::string& in_path,
 //------------------------------------------------------------------------------
 //  Phase 4 – rewrite sorted file                                               
 //------------------------------------------------------------------------------
-/**
- * rewrite_sorted_mmap
- *  - in_path:  path to the unsorted input file
- *  - out_path: path for the sorted output file
- *  - idx:      array of IndexRec entries (key, offset, len), already sorted by key
- *  - n_idx:    number of entries in idx[]
- *
- * Returns true on success, false on any error.
- */
-static bool
-rewrite_sorted_mmap(const std::string& in_path,
-                    const std::string& out_path,
-                    IndexRec*          idx,
-                    std::size_t        n_idx)
+static bool rewrite_sorted(const std::string& in_path,
+               const std::string& out_path,
+               IndexRec*          idx,
+               std::size_t        n_idx,
+               std::size_t        payload_max = 256)
 {
-    // 1) open & stat input
-    int fd_in = ::open(in_path.c_str(), O_RDONLY);
-    if (fd_in < 0) { perror("open in"); return false; }
-    struct stat st;
-    if (fstat(fd_in, &st) < 0) { perror("fstat in"); close(fd_in); return false; }
-    size_t in_size = st.st_size;
-
-    // 2) mmap entire input read-only
-    char* in_map = (char*)mmap(nullptr, in_size,
-                               PROT_READ, MAP_SHARED, fd_in, 0);
-    if (in_map == MAP_FAILED) { perror("mmap in"); close(fd_in); return false; }
-
-    // 3) compute total output size
-    size_t out_size = 0;
-    for (size_t i = 0; i < n_idx; ++i) {
-        out_size += sizeof(idx[i].key)
-                  + sizeof(idx[i].len)
-                  + idx[i].len;
+    std::ifstream fin(in_path,  std::ios::binary);
+    if (!fin) {
+        std::cerr << "[rewrite_sorted] Error: cannot open input file “" << in_path << "”.\n";
+        return false;
     }
 
-    // 4) open, truncate & mmap output read/write
-    int fd_out = ::open(out_path.c_str(),
-                        O_CREAT|O_RDWR|O_TRUNC, 0644);
-    if (fd_out < 0) { perror("open out"); munmap(in_map, in_size); close(fd_in); return false; }
-    if (ftruncate(fd_out, out_size) < 0) { perror("ftruncate"); munmap(in_map, in_size); close(fd_in); close(fd_out); return false; }
-
-    char* out_map = (char*)mmap(nullptr, out_size,
-                                PROT_WRITE, MAP_SHARED, fd_out, 0);
-    if (out_map == MAP_FAILED) { perror("mmap out"); munmap(in_map, in_size); close(fd_in); close(fd_out); return false; }
-
-    // 5) copy each record in one memcpy
-    size_t out_off = 0;
-    for (size_t i = 0; i < n_idx; ++i) {
-        IndexRec& r = idx[i];
-        size_t rec_size = sizeof(r.key) + sizeof(r.len) + r.len;
-
-        // direct memcpy from input-mapped region
-        std::memcpy(out_map + out_off,
-                    in_map  + r.offset,
-                    rec_size);
-
-        out_off += rec_size;
+    std::ofstream fout(out_path, std::ios::binary | std::ios::trunc);
+    if (!fout) {
+        std::cerr << "[rewrite_sorted] Error: cannot create sorted output file “" << out_path << "”.\n";
+        return false;
     }
 
-    // 6) cleanup
-    munmap(in_map,  in_size);
-    munmap(out_map, out_size);
-    close(fd_in);
-    close(fd_out);
+    // Max payload possible working buffer
+    std::vector<char> buf(payload_max);
+
+    for (std::size_t i = 0; i < n_idx; ++i) {
+        const IndexRec& r = idx[i];
+
+        // seek straight to the payload
+        uint64_t payload_pos = r.offset
+                             + sizeof(r.key)
+                             + sizeof(r.len);
+        fin.seekg(payload_pos, std::ios::beg);
+
+        fin.read(buf.data(), r.len);
+
+        // write from our in-memory index + buf
+        fout.write(reinterpret_cast<const char*>(&r.key), sizeof(r.key));
+        fout.write(reinterpret_cast<const char*>(&r.len), sizeof(r.len));
+        fout.write(buf.data(),                         r.len);
+    }
+
     return true;
 }
 
@@ -263,7 +219,7 @@ int main(int argc, char** argv)
 
     // Phase 2 – build index ------------------------------------------------
     BENCH_START(build_index);
-    IndexRec*   idx   = build_index_mmap(unsorted_file, opt.n_records);
+    IndexRec*   idx   = build_index(unsorted_file, opt.n_records);
     BENCH_STOP(build_index);
 
     // Phase 3 – sort index in RAM -----------------------------------------
@@ -276,9 +232,9 @@ int main(int argc, char** argv)
 
     // Phase 4 – rewrite sorted file ---------------------------------------
     BENCH_START(rewrite_sorted);
-    rewrite_sorted_mmap(unsorted_file, "files/sorted_"
+    rewrite_sorted(unsorted_file, "files/sorted_"
                      + std::to_string(opt.n_records) + "_"
-                     + std::to_string(opt.payload_max) + ".bin", idx, opt.n_records);
+                     + std::to_string(opt.payload_max) + ".bin", idx, opt.n_records, opt.payload_max);
     BENCH_STOP(rewrite_sorted);
 
     // Phase 5 – free index ------------------------------------------------

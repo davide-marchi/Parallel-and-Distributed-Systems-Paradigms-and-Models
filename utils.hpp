@@ -90,8 +90,8 @@ static inline Params parse_argv(int argc, char** argv)
                     std::fprintf(stderr, "Error: --payload not a number (%s)\n", optarg);
                     std::exit(1);
                 }
-                if (opt.payload_max < 8 || opt.payload_max > 256) {
-                    std::fprintf(stderr, "Error: --payload must be ≥ 8 and ≤ 256 (got %u)\n", opt.payload_max);
+                if (opt.payload_max < 8) {
+                    std::fprintf(stderr, "Error: --payload must be ≥ 8 (got %u)\n", opt.payload_max);
                     std::exit(1);
                 }
                 break;

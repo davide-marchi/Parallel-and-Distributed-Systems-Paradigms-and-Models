@@ -36,3 +36,21 @@ Verifying output…
 Success: sorted file is in order.
 
 ###################################
+
+Sequential with mmap build index and mmap rewrite sorted (huge improvements)
+
+./bin/sequential -n 10000000 -p 8
+Found existing unsorted file (“files/unsorted_10000000_8.bin”) – skipping generation.
+[build_index         ]    152.321 ms
+[sort_records        ]    686.055 ms
+[rewrite_sorted      ]   1174.570 ms
+Verifying output…
+Success: sorted file is in order.
+
+./bin/sequential -n 10000000 -p 256
+Found existing unsorted file (“files/unsorted_10000000_256.bin”) – skipping generation.
+[build_index         ]    390.475 ms
+[sort_records        ]    693.362 ms
+[rewrite_sorted      ]   7034.766 ms
+Verifying output…
+Success: sorted file is in order.
