@@ -54,3 +54,42 @@ Found existing unsorted file (“files/unsorted_10000000_256.bin”) – skippin
 [rewrite_sorted      ]   7034.766 ms
 Verifying output…
 Success: sorted file is in order.
+
+###################################################
+
+file generation:
+
+bad mmap ()
+
+./bin/sequential -n 10000000 -p 256
+[open                ]      0.165 ms
+[ftruncate           ]   7034.801 ms
+[generate_records    ]   6903.305 ms
+[closing_file_and_truncating]   2074.251 ms
+Generated “files/unsorted_10000000_256.bin” (1439771078 bytes).
+[generate_unsorted_file]  16012.792 ms
+[build_index         ]    411.436 ms
+[sort_records        ]    696.483 ms
+[open_and_mmap_output]   4070.718 ms
+[rewrite_sorted      ]   7863.363 ms
+Verifying output…
+File is sorted.
+[check_if_sorted_mmap]    295.085 ms
+
+good map (with correct size ans single memcopy in the map)
+
+./bin/sequential -n 10000000 -p 256
+[generate_arrays     ]    190.114 ms
+[open_truncate       ]   3811.702 ms
+[mmap                ]      0.018 ms
+[generate_records    ]   5781.472 ms
+[teardown            ]   1809.797 ms
+Generated “files/unsorted_10000000_256.bin” (1440222028 bytes).
+[generate_unsorted_file]  11605.020 ms
+[build_index         ]    437.586 ms
+[sort_records        ]    692.663 ms
+[open_and_mmap_output]   4115.131 ms
+[rewrite_sorted      ]   7723.715 ms
+Verifying output…
+File is sorted.
+[check_if_sorted_mmap]    294.433 ms

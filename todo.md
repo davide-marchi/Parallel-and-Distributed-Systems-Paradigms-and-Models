@@ -15,3 +15,6 @@ Fastflow
     - remove is_sort! sorting condition can be calculated by the worker (offset could be worker private variable)
     - instead of left, mid and right can we have like pointer fo first element, to the mid one and total lenght?
         - would remove global variable but would reuire to change the merge_record()
+
+
+Devo cancellare i file ordinati dopo il controllo?
