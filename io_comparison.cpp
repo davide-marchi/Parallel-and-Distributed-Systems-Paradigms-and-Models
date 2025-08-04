@@ -103,7 +103,7 @@ static std::string generate_unsorted_file_streaming(std::size_t    total_n,
     return path;
 }
 
-static std::string generate_unsorted_file(std::size_t total_n,
+static std::string generate_unsorted_file_stdio(std::size_t total_n,
                                           std::uint32_t payload_max)
 {
     // 1) ensure output folder
@@ -164,14 +164,14 @@ static std::string generate_unsorted_file(std::size_t total_n,
 
 
 
-static std::string generate_unsorted_file(std::size_t total_n,
+static std::string generate_unsorted_file_setvbuf(std::size_t total_n,
                                           std::uint32_t payload_max)
 {
     // 1) ensure output folder
     std::filesystem::create_directories("files");
 
     // 2) cache-keyed filename
-    std::string path = "files/b_unsorted_"
+    std::string path = "files/c_unsorted_"
                      + std::to_string(total_n) + "_"
                      + std::to_string(payload_max) + ".bin";
 
@@ -256,8 +256,103 @@ static std::string generate_unsorted_file(std::size_t total_n,
     return path;
 }
 
+static std::string generate_unsorted_file_mmap(std::size_t total_n,
+                                               std::uint32_t payload_max)
+{
+    namespace fs = std::filesystem;
+    fs::create_directories("files");
 
-static std::string generate_unsorted_file(std::size_t total_n,
+    std::string path = "files/d_unsorted_"
+                     + std::to_string(total_n) + "_"
+                     + std::to_string(payload_max) + ".bin";
+
+    if (fs::exists(path)) {
+        std::cout << "Skipping gen; found “" << path << "”.\n";
+        return path;
+    }
+
+    constexpr std::size_t KEY_SZ = sizeof(unsigned long);
+    constexpr std::size_t LEN_SZ = sizeof(uint32_t);
+
+    // RNG setup
+    std::mt19937                    rng{42};
+    std::uniform_int_distribution<> key_gen(0, INT32_MAX);
+    std::uniform_int_distribution<> len_gen(8, payload_max);
+    std::uniform_int_distribution<> byte_gen(0, 255);
+
+    // 1) Precompute keys & lengths so we know exact file size
+    BENCH_START(generate_arrays);
+    std::vector<unsigned long> keys (total_n);
+    std::vector<uint32_t>      lens (total_n);
+    size_t exact_size = 0;
+    for (size_t i = 0; i < total_n; ++i) {
+        keys[i] = static_cast<unsigned long>( key_gen(rng) );
+        lens[i] = static_cast<uint32_t>      ( len_gen(rng) );
+        exact_size += KEY_SZ + LEN_SZ + lens[i];
+    }
+    BENCH_STOP(generate_arrays);
+
+    BENCH_START(open_fallocate);
+    int fd = ::open(path.c_str(), O_CREAT | O_RDWR, 0644);
+    if (fd < 0) {
+        std::perror("open");
+        std::exit(1);
+    }
+    if (int err = posix_fallocate(fd, 0, exact_size); err != 0) {
+        std::cerr << "posix_fallocate failed: "
+                  << std::strerror(err) << "\n";
+        ::close(fd);
+        std::exit(1);
+    }
+    BENCH_STOP(open_fallocate);
+
+    // 3) mmap(write-only) the exact_size region
+    BENCH_START(mmap);
+    char* map = static_cast<char*>(
+        mmap(nullptr, exact_size, PROT_WRITE, MAP_SHARED, fd, 0)
+    );
+    if (map == MAP_FAILED) {
+        std::perror("mmap");
+        std::exit(1);
+    }
+    BENCH_STOP(mmap);
+
+    // 4) prepare a single-record buffer: header + max-payload
+    BENCH_START(generate_records);
+    std::vector<char> record_buf(KEY_SZ + LEN_SZ + payload_max);
+    size_t offset = 0;
+
+    for (size_t i = 0; i < total_n; ++i) {
+        unsigned long key = keys[i];
+        uint32_t      len = lens[i];
+
+        // fill header into record_buf
+        std::memcpy(record_buf.data(), &key, KEY_SZ);
+        std::memcpy(record_buf.data() + KEY_SZ, &len, LEN_SZ);
+
+        // fill payload bytes
+        for (uint32_t j = 0; j < len; ++j) {
+            record_buf[KEY_SZ + LEN_SZ + j] = static_cast<char>(byte_gen(rng));
+        }
+
+        // one bulk copy into the mmap’d file
+        size_t rec_sz = KEY_SZ + LEN_SZ + len;
+        std::memcpy(map + offset, record_buf.data(), rec_sz);
+        offset += rec_sz;
+    }
+    BENCH_STOP(generate_records);
+
+    // 5) unmap & close
+    BENCH_START(teardown);
+    munmap(map, exact_size);
+    ::close(fd);
+    BENCH_STOP(teardown);
+
+    std::cout << "Generated “" << path << "” (" << exact_size << " bytes).\n";
+    return path;
+}
+
+static std::string generate_unsorted_file_odirect(std::size_t total_n,
                                           std::uint32_t payload_max)
 {
     namespace fs = std::filesystem;
@@ -265,7 +360,7 @@ static std::string generate_unsorted_file(std::size_t total_n,
     fs::create_directories("files");
 
     // 2) build filename
-    std::string path = "files/b_unsorted_"
+    std::string path = "files/e_unsorted_"
                      + std::to_string(total_n) + "_"
                      + std::to_string(payload_max) + ".bin";
 
@@ -371,98 +466,56 @@ static std::string generate_unsorted_file(std::size_t total_n,
     return path;
 }
 
-static std::string generate_unsorted_file_mmap(std::size_t total_n,
-                                               std::uint32_t payload_max)
-{
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <num_records> <max_payload>\n";
+        return 1;
+    }
+    std::size_t    total_n     = std::stoull(argv[1]);
+    std::uint32_t payload_max = std::stoul (argv[2]);
+
     namespace fs = std::filesystem;
-    fs::create_directories("files");
 
-    std::string path = "files/unsorted_"
-                     + std::to_string(total_n) + "_"
-                     + std::to_string(payload_max) + ".bin";
-
-    if (fs::exists(path)) {
-        std::cout << "Skipping gen; found “" << path << "”.\n";
-        return path;
+    // 1) streaming/write()
+    {
+      // ensure we actually regenerate
+      fs::remove("files/a_unsorted_" + std::to_string(total_n) + "_" + std::to_string(payload_max) + ".bin");
+      BENCH_START(stream_write);
+      generate_unsorted_file_streaming(total_n, payload_max);
+      BENCH_STOP(stream_write);
     }
 
-    constexpr std::size_t KEY_SZ = sizeof(unsigned long);
-    constexpr std::size_t LEN_SZ = sizeof(uint32_t);
-
-    // RNG setup
-    std::mt19937                    rng{42};
-    std::uniform_int_distribution<> key_gen(0, INT32_MAX);
-    std::uniform_int_distribution<> len_gen(8, payload_max);
-    std::uniform_int_distribution<> byte_gen(0, 255);
-
-    // 1) Precompute keys & lengths so we know exact file size
-    BENCH_START(generate_arrays);
-    std::vector<unsigned long> keys (total_n);
-    std::vector<uint32_t>      lens (total_n);
-    size_t exact_size = 0;
-    for (size_t i = 0; i < total_n; ++i) {
-        keys[i] = static_cast<unsigned long>( key_gen(rng) );
-        lens[i] = static_cast<uint32_t>      ( len_gen(rng) );
-        exact_size += KEY_SZ + LEN_SZ + lens[i];
+    // 2) stdio/fwrite()
+    {
+      fs::remove("files/b_unsorted_" + std::to_string(total_n) + "_" + std::to_string(payload_max) + ".bin");
+      BENCH_START(stdio_fwrite);
+      generate_unsorted_file_stdio(total_n, payload_max);
+      BENCH_STOP(stdio_fwrite);
     }
-    BENCH_STOP(generate_arrays);
 
-    BENCH_START(open_fallocate);
-    int fd = ::open(path.c_str(), O_CREAT | O_RDWR, 0644);
-    if (fd < 0) {
-        std::perror("open");
-        std::exit(1);
+    // 3) setvbuf()
+    {
+      fs::remove("files/c_unsorted_" + std::to_string(total_n) + "_" + std::to_string(payload_max) + ".bin");
+      BENCH_START(setvbuf_fwrite);
+      generate_unsorted_file_setvbuf(total_n, payload_max);
+      BENCH_STOP(setvbuf_fwrite);
     }
-    if (int err = posix_fallocate(fd, 0, exact_size); err != 0) {
-        std::cerr << "posix_fallocate failed: "
-                  << std::strerror(err) << "\n";
-        ::close(fd);
-        std::exit(1);
+
+    // 4) mmap + fallocate
+    {
+      fs::remove("files/d_unsorted_" + std::to_string(total_n) + "_" + std::to_string(payload_max) + ".bin");
+      BENCH_START(mmap_fallocate);
+      generate_unsorted_file_mmap(total_n, payload_max);
+      BENCH_STOP(mmap_fallocate);
     }
-    BENCH_STOP(open_fallocate);
 
-    // 3) mmap(write-only) the exact_size region
-    BENCH_START(mmap);
-    char* map = static_cast<char*>(
-        mmap(nullptr, exact_size, PROT_WRITE, MAP_SHARED, fd, 0)
-    );
-    if (map == MAP_FAILED) {
-        std::perror("mmap");
-        std::exit(1);
+    // 5) O_DIRECT
+    {
+      fs::remove("files/e_unsorted_" + std::to_string(total_n) + "_" + std::to_string(payload_max) + ".bin");
+      BENCH_START(odirect_write);
+      generate_unsorted_file_odirect(total_n, payload_max);
+      BENCH_STOP(odirect_write);
     }
-    BENCH_STOP(mmap);
 
-    // 4) prepare a single-record buffer: header + max-payload
-    BENCH_START(generate_records);
-    std::vector<char> record_buf(KEY_SZ + LEN_SZ + payload_max);
-    size_t offset = 0;
-
-    for (size_t i = 0; i < total_n; ++i) {
-        unsigned long key = keys[i];
-        uint32_t      len = lens[i];
-
-        // fill header into record_buf
-        std::memcpy(record_buf.data(), &key, KEY_SZ);
-        std::memcpy(record_buf.data() + KEY_SZ, &len, LEN_SZ);
-
-        // fill payload bytes
-        for (uint32_t j = 0; j < len; ++j) {
-            record_buf[KEY_SZ + LEN_SZ + j] = static_cast<char>(byte_gen(rng));
-        }
-
-        // one bulk copy into the mmap’d file
-        size_t rec_sz = KEY_SZ + LEN_SZ + len;
-        std::memcpy(map + offset, record_buf.data(), rec_sz);
-        offset += rec_sz;
-    }
-    BENCH_STOP(generate_records);
-
-    // 5) unmap & close
-    BENCH_START(teardown);
-    munmap(map, exact_size);
-    ::close(fd);
-    BENCH_STOP(teardown);
-
-    std::cout << "Generated “" << path << "” (" << exact_size << " bytes).\n";
-    return path;
+    return 0;
 }

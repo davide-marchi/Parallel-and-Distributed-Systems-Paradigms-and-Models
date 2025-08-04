@@ -28,6 +28,7 @@ MPILIBS  := -lmpi
 SRCS := sequential.cpp \
         openmp.cpp     \
         fastflow.cpp   \
+        io_comparison.cpp \
         # mpi_omp.cpp    \
         # mpi_ff.cpp
 
