@@ -93,3 +93,55 @@ Generated “files/unsorted_10000000_256.bin” (1440222028 bytes).
 Verifying output…
 File is sorted.
 [check_if_sorted_mmap]    294.433 ms
+
+###############################################à
+
+Generating file with the mmap
+
+./bin/sequential_onlymmap -n 10000000 -p 8
+[generate_arrays     ]    185.810 ms
+[open_truncate       ]    500.177 ms
+[mmap                ]      0.017 ms
+[generate_records    ]    422.636 ms
+[teardown            ]    287.947 ms
+Generated “files/unsorted_10000000_8.bin” (200000000 bytes).
+[generate_unsorted_file]   1407.660 ms
+[build_index         ]    189.930 ms
+[sort_records        ]    696.438 ms
+[open_and_mmap_output]    549.384 ms
+[rewrite_sorted      ]   1150.967 ms
+Verifying output…
+File is sorted.
+[check_if_sorted_mmap]     43.339 ms
+davide@msi-bravo:~/Documents/University/Laurea Magistrale/Primo anno/PARALLEL AND DISTRIBUTED SYSTEMS PARADIGMS AND MODELS/Parallel-and-Distributed-Systems-Paradigms-and-Models$ ./bin/sequential_onlymmap -n 10000000 -p 256
+[generate_arrays     ]    183.331 ms
+[open_truncate       ]   3767.190 ms
+[mmap                ]      0.018 ms
+[generate_records    ]   5829.024 ms
+[teardown            ]    660.316 ms
+Generated “files/unsorted_10000000_256.bin” (1440222028 bytes).
+[generate_unsorted_file]  10450.834 ms
+[build_index         ]    426.408 ms
+[sort_records        ]    687.621 ms
+[open_and_mmap_output]   3788.294 ms
+[rewrite_sorted      ]   7303.547 ms
+Verifying output…
+File is sorted.
+[check_if_sorted_mmap]    283.521 ms
+
+##############################################
+
+Generating with buffers
+
+./bin/sequential -n 10000000 -p 8
+Generated “files/a_unsorted_10000000_8.bin”.
+[generate_unsorted_file_buff]    780.346 ms
+Streaming-generating 10000000 records into “files/b_unsorted_10000000_8.bin”…
+Unsorted file ready: “files/b_unsorted_10000000_8.bin”.
+[generate_unsorted_file]   1367.190 ms
+
+Generated “files/a_unsorted_10000000_256.bin”.
+[generate_unsorted_file_buff]   6223.629 ms
+Streaming-generating 10000000 records into “files/b_unsorted_10000000_256.bin”…
+Unsorted file ready: “files/b_unsorted_10000000_256.bin”.
+[generate_unsorted_file]   9428.470 ms

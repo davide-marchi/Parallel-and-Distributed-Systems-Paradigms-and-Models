@@ -19,13 +19,13 @@
 //------------------------------------------------------------------------------
 // Phase 1 – mmap generator with exact-size preallocation and single-recopy
 //------------------------------------------------------------------------------
-static std::string generate_unsorted_file_streaming(std::size_t    total_n,
-                                                    std::uint32_t payload_max)
+static std::string generate_unsorted_file_mmap(std::size_t total_n,
+                                               std::uint32_t payload_max)
 {
     namespace fs = std::filesystem;
     fs::create_directories("files");
 
-    std::string path = "files/a_unsorted_"
+    std::string path = "files/unsorted_"
                      + std::to_string(total_n) + "_"
                      + std::to_string(payload_max) + ".bin";
 
@@ -34,21 +34,8 @@ static std::string generate_unsorted_file_streaming(std::size_t    total_n,
         return path;
     }
 
-    // Open file for streaming writes
-    int fd = ::open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (fd < 0) {
-        std::perror("open");
-        std::exit(1);
-    }
-
-    // I/O buffer (1 MiB), flush when >= 512 KiB
-    constexpr std::size_t IO_BUF_SZ    = 1 << 20;
-    constexpr std::size_t FLUSH_THRESH = 512 << 10; // 512 KiB
-    std::vector<char> io_buf;
-    io_buf.reserve(IO_BUF_SZ);
-
-    // Payload scratch buffer
-    std::vector<char> payload_buf(payload_max);
+    constexpr std::size_t KEY_SZ = sizeof(unsigned long);
+    constexpr std::size_t LEN_SZ = sizeof(uint32_t);
 
     // RNG setup
     std::mt19937                    rng{42};
@@ -56,54 +43,74 @@ static std::string generate_unsorted_file_streaming(std::size_t    total_n,
     std::uniform_int_distribution<> len_gen(8, payload_max);
     std::uniform_int_distribution<> byte_gen(0, 255);
 
-    // Generate records into io_buf, flush in big batches
-    for (std::size_t i = 0; i < total_n; ++i) {
-        
-        // inside your loop, *instead* of RecHdr hdr + single insert:
-        unsigned long key = static_cast<unsigned long>( key_gen(rng) );
-        uint32_t      len = static_cast<uint32_t>      ( len_gen(rng) );
-
-        // fill payload_buf[0..len)
-        for (uint32_t j = 0; j < len; ++j)
-            payload_buf[j] = static_cast<char>(byte_gen(rng));
-
-        // pack header into a small on-stack buffer
-        char hdr_buf[sizeof(key) + sizeof(len)];
-        std::memcpy(hdr_buf,             &key, sizeof(key));
-        std::memcpy(hdr_buf + sizeof(key), &len,  sizeof(len));
-
-        // append header bytes
-        io_buf.insert(io_buf.end(), hdr_buf, hdr_buf + sizeof(hdr_buf));
-
-        // append payload bytes
-        io_buf.insert(io_buf.end(),
-                    payload_buf.data(),
-                    payload_buf.data() + len);
-
-        // flush if buffer is big
-        if (io_buf.size() >= FLUSH_THRESH) {
-            ssize_t w = ::write(fd, io_buf.data(), io_buf.size());
-            if (w < 0 || static_cast<size_t>(w) != io_buf.size()) {
-                std::perror("write");
-                ::close(fd);
-                std::exit(1);
-            }
-            io_buf.clear();
-        }
+    // 1) Precompute keys & lengths so we know exact file size
+    BENCH_START(generate_arrays);
+    std::vector<unsigned long> keys (total_n);
+    std::vector<uint32_t>      lens (total_n);
+    size_t exact_size = 0;
+    for (size_t i = 0; i < total_n; ++i) {
+        keys[i] = static_cast<unsigned long>( key_gen(rng) );
+        lens[i] = static_cast<uint32_t>      ( len_gen(rng) );
+        exact_size += KEY_SZ + LEN_SZ + lens[i];
     }
+    BENCH_STOP(generate_arrays);
 
-    // flush any remaining data
-    if (!io_buf.empty()) {
-        ssize_t w = ::write(fd, io_buf.data(), io_buf.size());
-        if (w < 0 || static_cast<size_t>(w) != io_buf.size()) {
-            std::perror("write final");
-            ::close(fd);
-            std::exit(1);
-        }
+    // 2) open & preallocate exactly exact_size bytes
+    BENCH_START(open_truncate);
+    int fd = ::open(path.c_str(), O_CREAT | O_RDWR, 0644);
+    if (fd < 0) {
+        std::perror("open");
+        std::exit(1);
     }
+    if (ftruncate(fd, exact_size) < 0) {
+        std::perror("ftruncate");
+        std::exit(1);
+    }
+    BENCH_STOP(open_truncate);
 
+    // 3) mmap(write-only) the exact_size region
+    BENCH_START(mmap);
+    char* map = static_cast<char*>(
+        mmap(nullptr, exact_size, PROT_WRITE, MAP_SHARED, fd, 0)
+    );
+    if (map == MAP_FAILED) {
+        std::perror("mmap");
+        std::exit(1);
+    }
+    BENCH_STOP(mmap);
+
+    // 4) prepare a single-record buffer: header + max-payload
+    BENCH_START(generate_records);
+    std::vector<char> record_buf(KEY_SZ + LEN_SZ + payload_max);
+    size_t offset = 0;
+
+    for (size_t i = 0; i < total_n; ++i) {
+        unsigned long key = keys[i];
+        uint32_t      len = lens[i];
+
+        // fill header into record_buf
+        std::memcpy(record_buf.data(), &key, KEY_SZ);
+        std::memcpy(record_buf.data() + KEY_SZ, &len, LEN_SZ);
+
+        // fill payload bytes
+        for (uint32_t j = 0; j < len; ++j) {
+            record_buf[KEY_SZ + LEN_SZ + j] = static_cast<char>(byte_gen(rng));
+        }
+
+        // one bulk copy into the mmap’d file
+        size_t rec_sz = KEY_SZ + LEN_SZ + len;
+        std::memcpy(map + offset, record_buf.data(), rec_sz);
+        offset += rec_sz;
+    }
+    BENCH_STOP(generate_records);
+
+    // 5) unmap & close
+    BENCH_START(teardown);
+    munmap(map, exact_size);
     ::close(fd);
-    std::cout << "Generated “" << path << "”.\n";
+    BENCH_STOP(teardown);
+
+    std::cout << "Generated “" << path << "” (" << exact_size << " bytes).\n";
     return path;
 }
 
@@ -322,7 +329,7 @@ int main(int argc, char** argv)
 
     // Phase 1 – streaming generation --------------------------------------
     BENCH_START(generate_unsorted_file);
-    std::string unsorted_file = generate_unsorted_file_streaming(opt.n_records, opt.payload_max);
+    std::string unsorted_file = generate_unsorted_file_mmap(opt.n_records, opt.payload_max);
     BENCH_STOP(generate_unsorted_file);
 
     // Phase 2 – build index ------------------------------------------------
