@@ -13,3 +13,6 @@ files/
 
 # vscode
 .vscode/
+
+# fastflow
+fastflow/
