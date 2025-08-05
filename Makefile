@@ -29,6 +29,8 @@ SRCS := sequential.cpp \
         openmp.cpp     \
         fastflow.cpp   \
         io_comparison.cpp \
+        sequential_onlymmap.cpp \
+        sequential_nommap.cpp \
         # mpi_omp.cpp    \
         # mpi_ff.cpp
 

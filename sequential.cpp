@@ -25,7 +25,7 @@ static std::string generate_unsorted_file_streaming(std::size_t    total_n,
     namespace fs = std::filesystem;
     fs::create_directories("files");
 
-    std::string path = "files/a_unsorted_"
+    std::string path = "files/unsorted_"
                      + std::to_string(total_n) + "_"
                      + std::to_string(payload_max) + ".bin";
 
@@ -41,9 +41,9 @@ static std::string generate_unsorted_file_streaming(std::size_t    total_n,
         std::exit(1);
     }
 
-    // I/O buffer (1 MiB), flush when >= 512 KiB
-    constexpr std::size_t IO_BUF_SZ    = 1 << 20;
-    constexpr std::size_t FLUSH_THRESH = 512 << 10; // 512 KiB
+    // I/O buffer (1 GiB), flush when >= 512 MiB
+    constexpr std::size_t IO_BUF_SZ    = 1 << 30;
+    constexpr std::size_t FLUSH_THRESH = 512 << 20; // 512 MiB
     std::vector<char> io_buf;
     io_buf.reserve(IO_BUF_SZ);
 

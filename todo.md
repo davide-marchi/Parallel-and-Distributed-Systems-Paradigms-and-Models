@@ -18,3 +18,26 @@ Fastflow
 
 
 Devo cancellare i file ordinati dopo il controllo?
+
+
+----
+
+Option bottom-upp (per svrapporre generazione index e ordinamento):
+
+base-case = 10'000
+
+1. leggo il file
+
+2. Ogni struct letta controllo:
+
+    (Sono degli if all'interno di un for, NON uno switch!)
+
+    - Se la struct è la numero 2^0 * base case: Ordino gli ultimi base-case con sort()
+
+    - Se la struct è la numero 2^1 * base case: Mergio gli ultimi 2 array di dim. 2^0 * base-case
+
+    - Se la struct è la numero 2^2 * base case: Mergio glu ultimi 2 array di dim. 2^1 * base case
+
+    - ...
+
+    Caso in cui la struct letta è l'ultima?

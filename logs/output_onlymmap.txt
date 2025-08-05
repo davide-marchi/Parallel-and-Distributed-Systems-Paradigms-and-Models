@@ -1,0 +1,16 @@
+srun bin/sequential_onlymmap -n 100000000 -p 8
+[generate_arrays     ]   4018.134 ms
+[open_truncate       ]     81.273 ms
+[mmap                ]      0.026 ms
+[generate_records    ]  11999.642 ms
+[teardown            ] 185260.842 ms
+Generated “files/unsorted_100000000_8.bin” (2000000000 bytes).
+[generate_unsorted_file] 201364.572 ms
+[build_index         ]   1068.235 ms
+[sort_records        ]  12470.667 ms
+[open_and_mmap_output]     25.092 ms
+[rewrite_sorted      ]  30734.122 ms
+Verifying output…
+File is sorted.
+[check_if_sorted_mmap]    476.212 ms
+

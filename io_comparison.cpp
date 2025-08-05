@@ -37,9 +37,9 @@ static std::string generate_unsorted_file_streaming(std::size_t    total_n,
         std::exit(1);
     }
 
-    // I/O buffer (1 MiB), flush when >= 512 KiB
-    constexpr std::size_t IO_BUF_SZ    = 1 << 20;
-    constexpr std::size_t FLUSH_THRESH = 512 << 10; // 512 KiB
+    // I/O buffer (1 GiB), flush when >= 512 MiB
+    constexpr std::size_t IO_BUF_SZ    = 1 << 30;
+    constexpr std::size_t FLUSH_THRESH = 512 << 20; // 512 MiB
     std::vector<char> io_buf;
     io_buf.reserve(IO_BUF_SZ);
 
@@ -201,7 +201,7 @@ static std::string generate_unsorted_file_setvbuf(std::size_t total_n,
 
     // 5) tune the stdio buffer to 512 KiB
     std::vector<char> io_buf(512 << 10);
-    if (std::setvbuf(f, nullptr, _IOFBF, 512 << 10) != 0) {
+    if (std::setvbuf(f, nullptr, _IOFBF, stats.st_blksize) != 0) {
         std::perror("setvbuf");
         std::fclose(f);
         std::exit(1);

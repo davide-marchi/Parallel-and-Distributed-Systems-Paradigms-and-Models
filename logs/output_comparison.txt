@@ -1,0 +1,59 @@
+Generated “files/a_unsorted_10000000_256.bin”.
+[stream_write        ]  33634.798 ms
+Streaming-generating 10000000 records into “files/b_unsorted_10000000_256.bin”…
+Unsorted file ready: “files/b_unsorted_10000000_256.bin”.
+[stdio_fwrite        ]  27382.517 ms
+BUFSIZ is 8192, but optimal block size is 1048576
+Streaming-generating 10000000 records into "files/c_unsorted_10000000_256.bin"…
+Unsorted file ready: "files/c_unsorted_10000000_256.bin".
+[setvbuf_fwrite      ]  21690.073 ms
+[generate_arrays     ]    405.065 ms
+[open_fallocate      ]     25.671 ms
+[mmap                ]      0.026 ms
+[generate_records    ]  14824.201 ms
+[teardown            ]  27418.757 ms
+Generated “files/d_unsorted_10000000_256.bin” (1440222028 bytes).
+[mmap_fallocate      ]  42674.708 ms
+Streaming-generating 10000000 records into "files/e_unsorted_10000000_256.bin" with O_DIRECT…
+Unsorted file ready: "files/e_unsorted_10000000_256.bin".
+[odirect_write       ]  89396.495 ms
+
+Generated “files/a_unsorted_10000000_256.bin”.
+[stream_write        ] 108758.485 ms
+Streaming-generating 10000000 records into “files/b_unsorted_10000000_256.bin”…
+Unsorted file ready: “files/b_unsorted_10000000_256.bin”.
+[stdio_fwrite        ]  20413.666 ms
+BUFSIZ is 8192, but optimal block size is 1048576
+Streaming-generating 10000000 records into "files/c_unsorted_10000000_256.bin"…
+Unsorted file ready: "files/c_unsorted_10000000_256.bin".
+[setvbuf_fwrite      ]  47973.324 ms
+[generate_arrays     ]    407.878 ms
+[open_fallocate      ]    148.006 ms
+[mmap                ]      0.040 ms
+[generate_records    ]  14975.573 ms
+[teardown            ]  15495.449 ms
+Generated “files/d_unsorted_10000000_256.bin” (1440222028 bytes).
+[mmap_fallocate      ]  31027.866 ms
+Streaming-generating 10000000 records into "files/e_unsorted_10000000_256.bin" with O_DIRECT…
+Unsorted file ready: "files/e_unsorted_10000000_256.bin".
+[odirect_write       ]  39236.698 ms
+
+Generated “files/a_unsorted_10000000_256.bin”.
+[stream_write        ]  48583.323 ms
+Streaming-generating 10000000 records into “files/b_unsorted_10000000_256.bin”…
+Unsorted file ready: “files/b_unsorted_10000000_256.bin”.
+[stdio_fwrite        ] 105960.016 ms
+BUFSIZ is 8192, but optimal block size is 1048576
+Streaming-generating 10000000 records into "files/c_unsorted_10000000_256.bin"…
+Unsorted file ready: "files/c_unsorted_10000000_256.bin".
+[setvbuf_fwrite      ]  39650.644 ms
+[generate_arrays     ]    405.603 ms
+[open_fallocate      ]      2.253 ms
+[mmap                ]      0.025 ms
+[generate_records    ]  14830.265 ms
+[teardown            ]   6506.072 ms
+Generated “files/d_unsorted_10000000_256.bin” (1440222028 bytes).
+[mmap_fallocate      ]  21744.966 ms
+Streaming-generating 10000000 records into "files/e_unsorted_10000000_256.bin" with O_DIRECT…
+Unsorted file ready: "files/e_unsorted_10000000_256.bin".
+[odirect_write       ]  42179.944 ms
