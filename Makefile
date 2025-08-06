@@ -26,7 +26,7 @@ MPILIBS  := -lmpi
 
 # ------------------------------------------------------------------ sources
 SRCS := openmp_seq_mmap.cpp     \
-        fastflow.cpp   \
+        fastflow_seq_mmap.cpp   \
         sequential_seq_mmap.cpp \
         # mpi_omp.cpp \
         # mpi_ff.cpp
