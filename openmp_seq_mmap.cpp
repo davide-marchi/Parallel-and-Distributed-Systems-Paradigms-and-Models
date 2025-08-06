@@ -14,7 +14,7 @@
 /*-------------------------------------------------------------------------*/
 /*  Recursive task-parallel MergeSort                                      */
 /*-------------------------------------------------------------------------*/
-static inline void mergesort_task(Record* base,
+static inline void mergesort_task(IndexRec* base,
                                   std::size_t left,
                                   std::size_t right,
                                   int cutoff)
@@ -38,28 +38,46 @@ static inline void mergesort_task(Record* base,
     }
 }
 
-/*-------------------------------------------------------------------------*/
-/*  Main driver                                                            */
-/*-------------------------------------------------------------------------*/
+//------------------------------------------------------------------------------
+//  Main                                                                        
+//------------------------------------------------------------------------------
 int main(int argc, char** argv)
 {
     Params opt = parse_argv(argc, argv);
 
+    // Phase 1 – streaming generation --------------------------------------
+    BENCH_START(generate_unsorted);
+    std::string unsorted_file = generate_unsorted_file_mmap(opt.n_records, opt.payload_max);
+    BENCH_STOP(generate_unsorted);
+
+    // Phase 2 – build index ------------------------------------------------
+    BENCH_START(build_index);
+    IndexRec*   idx   = build_index_mmap(unsorted_file, opt.n_records);
+    BENCH_STOP(build_index);
+
+    // Phase 3 – sort index in RAM -----------------------------------------
+    BENCH_START(sort_records);
     if (opt.n_threads > 0)
         omp_set_num_threads(opt.n_threads);
-
-    Record* data = alloc_random_records(opt.n_records, opt.payload_max);
-
-    const std::size_t cutoff = opt.cutoff;           // task granularity
-
-    BENCH_START(parallel_merge_sort);
     #pragma omp parallel
     {
         #pragma omp single nowait
-        mergesort_task(data, 0, opt.n_records - 1, cutoff);
+        mergesort_task(idx, 0, opt.n_records - 1, opt.cutoff);
     }
-    BENCH_STOP(parallel_merge_sort);
+    BENCH_STOP(sort_records);
 
-    check_if_sorted(data, opt.n_records);
-    release_records(data, opt.n_records);
+    // Phase 4 – rewrite sorted file ---------------------------------------
+    BENCH_START(rewrite_sorted);
+    rewrite_sorted_mmap(unsorted_file, "files/sorted_"
+                     + std::to_string(opt.n_records) + "_"
+                     + std::to_string(opt.payload_max) + ".bin", idx, opt.n_records);
+    BENCH_STOP(rewrite_sorted);
+
+    // Phase 5 – verify -----------------------------------------------------
+    BENCH_START(check_if_sorted);
+    check_if_sorted_mmap("files/sorted_"
+                     + std::to_string(opt.n_records) + "_"
+                     + std::to_string(opt.payload_max) + ".bin", opt.n_records);
+    BENCH_STOP(check_if_sorted);
+    return 0;
 }

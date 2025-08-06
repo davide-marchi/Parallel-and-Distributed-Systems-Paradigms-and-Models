@@ -1,20 +1,6 @@
-#include "utils.hpp"
-
-#include <algorithm>
-#include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <cstdio>
-
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <cstdlib>
-#include <string>
-
+#include "utils.hpp"   // Param / parse_argv, BENCH macros, and all the mmap-helper functions
+#include <iostream>    // std::cout
+#include <string>      // std::string, std::to_string
 
 //------------------------------------------------------------------------------
 //  Main                                                                        

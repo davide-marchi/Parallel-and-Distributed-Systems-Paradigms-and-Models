@@ -174,12 +174,12 @@ static inline void dump_records(const Record* base, std::size_t n, std::size_t m
 /*---------------------------------------------------------------------------*/
 /* 7.  Merge two sorted runs into their location                             */
 /*---------------------------------------------------------------------------*/
-static inline void merge_records(Record* base, std::size_t left, std::size_t mid, std::size_t right)
+static inline void merge_records(IndexRec* base, std::size_t left, std::size_t mid, std::size_t right)
 {
     std::inplace_merge(base + left,           // first half begin
                        base + mid + 1,        // second half begin
                        base + right + 1,      // range end (one-past-last)
-                       [](const Record& a, const Record& b) { return a.key < b.key; });
+                       [](const IndexRec& a, const IndexRec& b) { return a.key < b.key; });
 }
 
 /*---------------------------------------------------------------------------*/
