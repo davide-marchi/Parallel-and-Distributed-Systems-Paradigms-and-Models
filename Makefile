@@ -25,10 +25,9 @@ LIBS     := -pthread
 MPILIBS  := -lmpi
 
 # ------------------------------------------------------------------ sources
-SRCS := sequential.cpp \
-        openmp.cpp     \
+SRCS := openmp.cpp     \
         fastflow.cpp   \
-        sequential_seq_map.cpp \
+        sequential_seq_mmap.cpp \
         # mpi_omp.cpp \
         # mpi_ff.cpp
 

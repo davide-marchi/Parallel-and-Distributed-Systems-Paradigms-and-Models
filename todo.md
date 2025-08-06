@@ -17,8 +17,11 @@ Fastflow
         - would remove global variable but would reuire to change the merge_record()
 
 
-Devo cancellare i file ordinati dopo il controllo?
+----
 
+- Devo cancellare i file ordinati dopo il controllo?
+
+- Usare posix_fallocate? usare madvise(map, exact_size, MADV_SEQUENTIAL);?
 
 ----
 
