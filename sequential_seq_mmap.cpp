@@ -45,10 +45,7 @@ int main(int argc, char** argv)
                      + std::to_string(opt.payload_max) + ".bin", idx, opt.n_records);
     BENCH_STOP(rewrite_sorted);
 
-    // Phase 5 – free index ------------------------------------------------
-    std::free(idx);
-
-    // Phase 6 – verify -----------------------------------------------------
+    // Phase 5 – verify -----------------------------------------------------
     BENCH_START(check_if_sorted);
     check_if_sorted_mmap("files/sorted_"
                      + std::to_string(opt.n_records) + "_"

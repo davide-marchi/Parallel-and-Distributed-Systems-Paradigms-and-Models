@@ -212,7 +212,7 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
     std::uniform_int_distribution<> byte_gen(0, 255);
 
     // 1) Precompute keys & lengths so we know exact file size
-    BENCH_START(generate_arrays);
+    //BENCH_START(generate_arrays);
     std::vector<unsigned long> keys (total_n);
     std::vector<uint32_t>      lens (total_n);
     size_t exact_size = 0;
@@ -221,10 +221,10 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
         lens[i] = static_cast<uint32_t>      ( len_gen(rng) );
         exact_size += KEY_SZ + LEN_SZ + lens[i];
     }
-    BENCH_STOP(generate_arrays);
+    //BENCH_STOP(generate_arrays);
 
     // 2) open & preallocate exactly exact_size bytes
-    BENCH_START(open_truncate);
+    //BENCH_START(open_truncate);
     int fd = ::open(path.c_str(), O_CREAT | O_RDWR, 0644);
     if (fd < 0) {
         std::perror("open");
@@ -234,10 +234,10 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
         std::perror("ftruncate");
         std::exit(1);
     }
-    BENCH_STOP(open_truncate);
+    //BENCH_STOP(open_truncate);
 
     // 3) mmap(write-only) the exact_size region
-    BENCH_START(mmap);
+    //BENCH_START(mmap);
     char* map = static_cast<char*>(
         mmap(nullptr, exact_size, PROT_WRITE, MAP_SHARED, fd, 0)
     );
@@ -245,10 +245,10 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
         std::perror("mmap");
         std::exit(1);
     }
-    BENCH_STOP(mmap);
+    //BENCH_STOP(mmap);
 
     // 4) prepare a single-record buffer: header + max-payload
-    BENCH_START(generate_records);
+    //BENCH_START(generate_records);
     std::vector<char> record_buf(KEY_SZ + LEN_SZ + payload_max);
     size_t offset = 0;
 
@@ -270,13 +270,13 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
         std::memcpy(map + offset, record_buf.data(), rec_sz);
         offset += rec_sz;
     }
-    BENCH_STOP(generate_records);
+    //BENCH_STOP(generate_records);
 
     // 5) unmap & close
-    BENCH_START(teardown);
+    //BENCH_START(teardown);
     munmap(map, exact_size);
     ::close(fd);
-    BENCH_STOP(teardown);
+    //BENCH_STOP(teardown);
 
     std::cout << "Generated “" << path << "” (" << exact_size << " bytes).\n";
     return path;
@@ -396,7 +396,7 @@ rewrite_sorted_mmap(const std::string& in_path,
                   + idx[i].len;
     }
 
-    BENCH_START(open_and_mmap_output);
+    //BENCH_START(open_and_mmap_output);
     // 4) open, truncate & mmap output read/write
     int fd_out = ::open(out_path.c_str(),
                         O_CREAT|O_RDWR|O_TRUNC, 0644);
@@ -407,7 +407,7 @@ rewrite_sorted_mmap(const std::string& in_path,
                                 PROT_WRITE, MAP_SHARED, fd_out, 0);
     if (out_map == MAP_FAILED) { perror("mmap out"); munmap(in_map, in_size); close(fd_in); close(fd_out); return false; }
 
-    BENCH_STOP(open_and_mmap_output);
+    //BENCH_STOP(open_and_mmap_output);
 
     // 5) copy each record in one memcpy
     size_t out_off = 0;
@@ -428,6 +428,7 @@ rewrite_sorted_mmap(const std::string& in_path,
     munmap(out_map, out_size);
     close(fd_in);
     close(fd_out);
+    free(idx);
     return true;
 }
 
@@ -476,6 +477,12 @@ static bool check_if_sorted_mmap(const std::string& path,
     munmap(map, sz);
     close(fd);
     std::cout << "File is sorted.\n";
+
+    // POSIX unlink
+    if (unlink(path.c_str()) < 0) {
+        perror("unlink");
+    }
+
     return true;
 }
 
