@@ -21,8 +21,8 @@ using namespace ff;
 
 struct Task {
     std::size_t left, mid, right;
-    bool        is_sort;
     Task*       parent;            // nullptr only for root
+    bool        is_sort;
     bool        is_ready = false;  // for feedback
 };
 
@@ -66,11 +66,11 @@ private:
 static void build_tasks(std::size_t l, std::size_t r, Task* parent,
                         std::size_t cutoff, Emitter* emitter) {
     if (r - l + 1 <= cutoff) {          // leaf → sort directly
-        emitter->ff_send_out(new Task{l,0,r,true,parent});        // push leaf node directly
+        emitter->ff_send_out(new Task{ l, 0, r, /*parent=*/parent, /*is_sort=*/true }); // push leaf node directly
         return;
     }
     std::size_t m = (l + r) / 2;
-    Task* t = new Task{l,m,r,false,parent};
+    Task* t = new Task{ l, m, r, /*parent=*/parent, /*is_sort=*/false }; // create merge task
     build_tasks(l,   m, t, cutoff, emitter);
     build_tasks(m+1, r, t, cutoff, emitter);
 }
