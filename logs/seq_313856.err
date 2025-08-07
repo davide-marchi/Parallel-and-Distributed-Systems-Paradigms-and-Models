@@ -1,0 +1,4 @@
+srun: Job step aborted: Waiting up to 62 seconds for job step to finish.
+slurmstepd-node02: error: *** STEP 313856.24 ON node02 CANCELLED AT 2025-08-07T18:42:05 DUE TO TIME LIMIT ***
+slurmstepd-node02: error: *** JOB 313856 ON node02 CANCELLED AT 2025-08-07T18:42:05 DUE TO TIME LIMIT ***
+srun: error: node02: task 0: Terminated
