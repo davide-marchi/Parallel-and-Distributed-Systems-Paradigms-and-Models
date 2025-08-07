@@ -1,4 +1,4 @@
-trial,n_records,payload_max,build_index_ms,rewrite_sorted_ms
+trial,n_records,payload_max,build_index_ms,rewrite_sorted_ms,total_time_ms
 1,10000,8,1.051,0.651,77.173,94.127
 1,10000,16,1.136,0.671,63.977,86.754
 1,10000,32,1.310,0.733,83.011,101.223
