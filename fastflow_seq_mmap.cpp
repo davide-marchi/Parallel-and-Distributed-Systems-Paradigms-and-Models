@@ -99,6 +99,8 @@ int main(int argc, char** argv)
 {
     Params opt = parse_argv(argc, argv);
 
+    BENCH_START(total_time);
+
     // Phase 1 – streaming generation --------------------------------------
     BENCH_START(generate_unsorted);
     std::string unsorted_file = generate_unsorted_file_mmap(opt.n_records, opt.payload_max);
@@ -147,5 +149,8 @@ int main(int argc, char** argv)
                      + std::to_string(opt.n_records) + "_"
                      + std::to_string(opt.payload_max) + ".bin", opt.n_records);
     BENCH_STOP(check_if_sorted);
+
+    BENCH_STOP(total_time);
+
     return 0;
 }
