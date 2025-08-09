@@ -116,24 +116,30 @@ int main(int argc, char** argv)
     
     const int nthreads       = opt.n_threads > 0 ? opt.n_threads : ff_numCores();
 
-    g_base = idx;
+    if (nthreads <= 1) {
+        // sequential fallback
+        sort_records(idx, opt.n_records);
+    } else {
 
-    Emitter emitter(opt.n_records, opt.cutoff);
-    std::vector<ff_node*> workers;
-    for (int i = 0; i < nthreads - 1; ++i) workers.push_back(new Worker());
+        g_base = idx;
 
-    ff_farm farm;
-    farm.add_emitter(&emitter);
-    farm.add_workers(workers);
-    farm.remove_collector();
-    farm.wrap_around();
+        Emitter emitter(opt.n_records, opt.cutoff);
+        std::vector<ff_node*> workers;
+        for (int i = 0; i < nthreads - 1; ++i) workers.push_back(new Worker());
 
-    if (farm.run_and_wait_end() < 0) {
-        error("FastFlow execution failed\n");
-        return 1;
+        ff_farm farm;
+        farm.add_emitter(&emitter);
+        farm.add_workers(workers);
+        farm.remove_collector();
+        farm.wrap_around();
+
+        if (farm.run_and_wait_end() < 0) {
+            error("FastFlow execution failed\n");
+            return 1;
+        }
+
+        for (auto* w : workers) delete w;
     }
-
-    for (auto* w : workers) delete w;
     BENCH_STOP(sort_records);
 
     // Phase 4 – rewrite sorted file ---------------------------------------
