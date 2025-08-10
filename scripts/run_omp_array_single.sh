@@ -17,9 +17,9 @@
 set -euo pipefail
 
 # ---- Sweep space ----
-TRIALS=3
-RECORDS=(10000 100000 1000000 10000000 100000000)
-PAYLOAD_MAX=(8 16 32 64 128)
+TRIALS=1
+RECORDS=(100000 1000000 10000000 100000000)
+PAYLOAD_MAX=(8 32 128)
 CUTOFFS=(1000 10000 100000)
 THREADS=(1 2 4 8 16 32)                  # all T must be ≤ --cpus-per-task
 BIN=./bin/openmp_seq_mmap
