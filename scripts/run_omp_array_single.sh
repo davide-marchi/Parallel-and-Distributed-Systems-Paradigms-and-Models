@@ -10,7 +10,7 @@
 # SLURM (single array; fixed resources for all tasks):
 #SBATCH --job-name=omp-grid
 #SBATCH --cpus-per-task=32                # reserve max threads for all elements
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --output=logs/omp_%A_%a.out
 #SBATCH --error=logs/omp_%A_%a.err
 

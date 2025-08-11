@@ -19,7 +19,7 @@
 # Slurm defaults for worker tasks:
 #SBATCH --job-name=seq-grid
 #SBATCH --cpus-per-task=1
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --output=logs/seq_%A_%a.out
 #SBATCH --error=logs/seq_%A_%a.err
 

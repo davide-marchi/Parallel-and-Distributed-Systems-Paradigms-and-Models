@@ -8,7 +8,7 @@
 #
 #SBATCH --job-name=ff-grid
 #SBATCH --cpus-per-task=32                # reserve max threads for all elements
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --output=logs/ff_%A_%a.out
 #SBATCH --error=logs/ff_%A_%a.err
 
