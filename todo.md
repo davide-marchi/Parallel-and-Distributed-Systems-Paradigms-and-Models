@@ -23,6 +23,8 @@ Fastflow
 
 - Usare posix_fallocate? usare madvise(map, exact_size, MADV_SEQUENTIAL);?
 
+- Compilare con -march=native (?)
+
 ----
 
 Option bottom-upp (per svrapporre generazione index e ordinamento):

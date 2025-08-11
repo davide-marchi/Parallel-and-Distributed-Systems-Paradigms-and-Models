@@ -1,70 +1,93 @@
+.DEFAULT_GOAL := all
+
 ##############################################################################
 #  Makefile
 #  - builds all *.cpp listed in SRCS
-#  - puts objects and dependency files in  	build/
-#  - puts final executables in          	bin/
+#  - puts objects and dependency files in   build/
+#  - puts final executables in              bin/
 ##############################################################################
 
-# ------------------------------------------------------------------ compiler
-CXX      ?= g++
-MPICXX   ?= mpicxx                # only used for MPI targets
+# ------------------------------------------------------------------ compilers
+CXX    ?= g++
+MPICXX ?= mpicxx
 
-# ------------------------------------------------------------------ flags
-CXXFLAGS += -std=c++20 -Wall
+# ------------------------------------------------------------------ flags (idiomatic split)
+CPPFLAGS +=                          # preprocessor flags (e.g., -I, -D)
+CXXFLAGS += -std=c++20 -Wall         # compile flags
 OPTFLAGS += -O3 -ffast-math
 DBGFLAGS += -O0 -g -DDEBUG
+LDFLAGS  +=                          # linker flags
+LDLIBS   += -pthread                 # libraries
 
+# CPU tuning (default native; override with: make MARCH=x86-64-v3)
+# MARCH ?= native
+# OPTFLAGS += -march=$(MARCH)
+
+# Mode toggle
 ifeq ($(MODE),debug)
   CXXFLAGS += $(DBGFLAGS)
 else
   CXXFLAGS += $(OPTFLAGS)
 endif
 
-INCLUDES += -I./fastflow          # FastFlow headers
-LIBS     := -pthread
-MPILIBS  := -lmpi
+# OpenMP switch (compile+link) for specific targets
+OMPOPTS := -fopenmp
 
-# ------------------------------------------------------------------ sources
-SRCS := openmp_seq_mmap.cpp     \
-        fastflow_seq_mmap.cpp   \
+# FastFlow include path (apply only where needed)
+FASTFLOW_CPPFLAGS := -I./fastflow
+
+# ------------------------------------------------------------------ sources / bins
+SRCS := openmp_seq_mmap.cpp \
+        fastflow_seq_mmap.cpp \
         sequential_seq_mmap.cpp \
-        # mpi_omp.cpp \
-        # mpi_ff.cpp
+        mpi_omp_seq_mmap.cpp
+#       mpi_ff.cpp
 
-BINS := $(SRCS:.cpp=)
+BINS := openmp_seq_mmap fastflow_seq_mmap sequential_seq_mmap mpi_omp_seq_mmap
+#      mpi_ff
 
 # ------------------------------------------------------------------ directories for artifacts
 BUILD := build
 BIN   := bin
-$(shell mkdir -p $(BUILD) $(BIN))
 
-CPP_O = $(BUILD)/$*.o
-CPP_D = $(BUILD)/$*.d
+# Keep object files; don't delete them as "intermediate"
+OBJS := $(SRCS:%.cpp=$(BUILD)/%.o)
+.SECONDARY: $(OBJS)
 
-# ------------------------------------------------------------------ generic pattern rules
-$(BUILD)/%.o : %.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) -MMD -MP -c $< -o $@
+# ensure dirs exist (order-only prerequisites)
+$(BUILD) $(BIN):
+	mkdir -p $@
 
-# Default link rule (sequential / OpenMP / FastFlow)
-$(BIN)/%: $(BUILD)/%.o
-	$(CXX) $^ -o $@ $(LIBS)
+# ------------------------------------------------------------------ generic compile/link rules
+$(BUILD)/%.o : %.cpp | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-# ------------------------------------------------------------------ special rules
+$(BIN)/%: $(BUILD)/%.o | $(BIN)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-# openmp: CPP & link flags
-$(BIN)/openmp_seq_mmap: CXXFLAGS += -fopenmp
-$(BIN)/openmp_seq_mmap: LIBS     += -fopenmp
+# ------------------------------------------------------------------ target-specific tweaks
 
-fastflow: INCLUDES += -I./fastflow
+# FastFlow TU needs only the FastFlow include at compile-time
+$(BUILD)/fastflow_seq_mmap.o: CPPFLAGS += $(FASTFLOW_CPPFLAGS)
+# Future FastFlow+MPI target
+# $(BUILD)/mpi_ff.o:            CPPFLAGS += $(FASTFLOW_CPPFLAGS)
 
-# mpi_omp: CXXFLAGS += -fopenmp
-# mpi_omp: LIBS     += -fopenmp
-# $(BIN)/mpi_omp: $(BUILD)/mpi_omp.o
-#	$(MPICXX) $^ -o $@ $(MPILIBS) $(LIBS)
-#
-# mpi_ff: INCLUDES += -I./fastflow
-# $(BIN)/mpi_ff: $(BUILD)/mpi_ff.o
-#	$(MPICXX) $^ -o $@ $(MPILIBS) $(LIBS)
+# OpenMP (sequential/OpenMP binary)
+$(BUILD)/openmp_seq_mmap.o: CXXFLAGS += $(OMPOPTS)
+$(BIN)/openmp_seq_mmap:     LDLIBS   += $(OMPOPTS)
+
+# MPI+OpenMP: compile the TU with MPICXX (so <mpi.h> is found) and link with MPICXX
+$(BUILD)/mpi_omp_seq_mmap.o: mpi_omp_seq_mmap.cpp | $(BUILD)
+	$(MPICXX) $(CPPFLAGS) $(CXXFLAGS) $(OMPOPTS) -MMD -MP -c $< -o $@
+
+$(BIN)/mpi_omp_seq_mmap: $(BUILD)/mpi_omp_seq_mmap.o | $(BIN)
+	$(MPICXX) $(LDFLAGS) $^ -o $@ $(LDLIBS) $(OMPOPTS)
+
+# Future: MPI+FastFlow binary
+# $(BUILD)/mpi_ff.o: mpi_ff.cpp | $(BUILD)
+# 	$(MPICXX) $(CPPFLAGS) $(FASTFLOW_CPPFLAGS) $(CXXFLAGS) $(OMPOPTS) -MMD -MP -c $< -o $@
+# $(BIN)/mpi_ff: $(BUILD)/mpi_ff.o | $(BIN)
+# 	$(MPICXX) $(LDFLAGS) $^ -o $@ $(LDLIBS) $(OMPOPTS)
 
 # ------------------------------------------------------------------ convenience targets
 .PHONY: all clean distclean
