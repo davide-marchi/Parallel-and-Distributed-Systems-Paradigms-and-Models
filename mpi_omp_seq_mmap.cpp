@@ -1,7 +1,6 @@
-// mpi_pairwise_tree.cpp
+// mpi_pairwise_tree.cpp  —  Log2(P) pairwise tree, minimal comms
 // Build: mpic++ -O3 -std=c++20 -fopenmp mpi_pairwise_tree.cpp -o bin/mpi_pairwise_tree
-// Run (Slurm srun example):
-//   srun -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_pairwise_tree -n 1000000 -p 256 -t 8 -c 10000
+// Run (Slurm): srun -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
 
 #include <mpi.h>
 #include <omp.h>
@@ -13,16 +12,14 @@
 #include <cstdlib>
 #include <iostream>
 
-#include "utils.hpp" // <- provides: Params parse_argv(...), BENCH_* timers,
-                     // IndexRec { key, offset, len }, sort_records, merge_records,
-                     // generate_unsorted_file_mmap, build_index_mmap,
-                     // rewrite_sorted_mmap, check_if_sorted_mmap
+#include "utils.hpp" // parse_argv, BENCH_* timers, IndexRec, sort_records, merge_records,
+                     // generate_unsorted_file_mmap, build_index_mmap, rewrite_sorted_mmap, check_if_sorted_mmap
 
-// -----------------------------------------------------------------------------
-// OpenMP task-based mergesort (your pattern): recursively sort halves with tasks,
-// use your utils.hpp: merge_records(...) for the merge and sort_records(...) for
-// small ranges. We keep it exactly in the spirit of your single-node code.
-// -----------------------------------------------------------------------------
+// ============================================================================
+// OpenMP task-based mergesort for IndexRec (reuses your utils.hpp primitives).
+// Splits [left..right] recursively; for small spans uses sort_records; for
+// larger spans spawns tasks and merges halves via merge_records (in-place).
+// ============================================================================
 static inline void mergesort_task(IndexRec* base,
                                   std::size_t left,
                                   std::size_t right,
@@ -37,18 +34,16 @@ static inline void mergesort_task(IndexRec* base,
         #pragma omp task shared(base)
         mergesort_task(base, mid + 1, right, cutoff);
         #pragma omp taskwait
-        // Merge two *adjacent* sorted ranges in-place:
-        // [left..mid] and [mid+1..right]
+        // Merge two adjacent sorted ranges: [left..mid], [mid+1..right]
         merge_records(base, left, mid, right);
     } else {
-        // Your fast small-range sorter (utils.hpp)
         sort_records(base + left, right - left + 1);
     }
 }
 
-// -----------------------------------------------------------------------------
-// Create an MPI datatype that matches IndexRec so we can Scatter/Send/Recv it.
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Create an MPI datatype describing IndexRec so we can Scatter/Send/Recv it.
+// ============================================================================
 static inline MPI_Datatype make_mpi_indexrec_type() {
     MPI_Datatype dtype;
     int          blocklen[3] = {1, 1, 1};
@@ -65,175 +60,195 @@ static inline MPI_Datatype make_mpi_indexrec_type() {
     return dtype;
 }
 
-// -----------------------------------------------------------------------------
-// Pairwise log2(P) merge tree on *sorted* IndexRec slices.
-// - Each round s: partner = rank ^ (1<<s). Lower rank in each pair receives.
-// - Receivers: recv partner slice, concatenate [mine | partner], then call
-//   merge_records(base, 0, mine_end, total_end) to get one sorted slice.
-// - Senders: send and become inactive.
-// After log2(P) rounds, rank 0 holds the fully sorted index.
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Deterministic counts (to avoid sending sizes)
+// ----------------------------------------------------------------------------
+// Our initial split is by record INDEX: rank r gets
+//   count_for_rank(r) = floor(N*(r+1)/P) - floor(N*r/P)
+// In merge round 'round' (0-based), each sender holds exactly the sum of the
+// counts in its size-2^round subtree. This lets the receiver precompute how
+// many IndexRec elements to expect from its partner without a Sendrecv.
+// ============================================================================
+
+// Count of records initially assigned to rank r (given total N, world size P).
+static inline int count_for_rank(int rank, uint64_t total_records, int world_size) {
+    const uint64_t end   = (total_records * (uint64_t)(rank + 1)) / world_size;
+    const uint64_t start = (total_records * (uint64_t) rank)      / world_size;
+    return static_cast<int>(end - start);
+}
+
+// Total size of the partner's subtree at a given round.
+// At round R, subtree size = 2^R; the partner's block begins at
+//   base = (partner / group) * group
+// We sum counts for that whole block.
+static inline int partner_subtree_size(int partner_rank,
+                                       int round,
+                                       uint64_t total_records,
+                                       int world_size)
+{
+    const int group = 1 << round;
+    const int base  = (partner_rank / group) * group;
+    int sum = 0;
+    for (int k = 0; k < group; ++k) {
+        sum += count_for_rank(base + k, total_records, world_size);
+    }
+    return sum;
+}
+
+// ============================================================================
+// Pairwise log2(P) merge tree on sorted IndexRec slices (NO size handshakes).
+// Each round pairs ranks with partner = rank ^ (1<<round).
+//  - Receivers (lower rank at block boundary) compute partner's size, recv it,
+//    concatenate [mine | partner] and call merge_records on the concatenated
+//    array to keep the result sorted.
+//  - Senders send their entire slice and become inactive.
+// Tags: payload uses (200 + round). No Barrier in the loop.
+// ============================================================================
 static void pairwise_merge_tree(std::vector<IndexRec>& local_sorted_index,
                                 int world_rank, int world_size,
+                                uint64_t total_records,
                                 MPI_Datatype MPI_IndexRec)
 {
-    std::vector<IndexRec> partner_index; // buffer for partner data (when receiving)
-    std::vector<IndexRec> concat;        // [mine | partner] before calling merge_records
+    std::vector<IndexRec> partner_buffer;  // holds received partner slice
+    std::vector<IndexRec> concat_buffer;   // [mine | partner] for inplace merge
 
     for (int round = 0; (1 << round) < world_size; ++round) {
         const int partner = world_rank ^ (1 << round);
         if (partner >= world_size) continue;
 
-        // "Receiver" rule: lower rank in the 2^(round+1) block receives & merges
-        const bool i_receive =
+        // Receiver rule: lower rank at each 2^(round+1) block boundary.
+        const bool i_am_receiver =
             ((world_rank & ((1 << (round + 1)) - 1)) == 0) && (world_rank < partner);
 
-        // Exchange counts (number of IndexRec elements)
-        int my_count = static_cast<int>(local_sorted_index.size());
-        int partner_count = 0;
-        MPI_Sendrecv(&my_count,     1, MPI_INT, partner, 100 + round,
-                     &partner_count,1, MPI_INT, partner, 100 + round,
-                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (i_am_receiver) {
+            // How many records will my partner send this round?
+            const int expect_from_partner =
+                partner_subtree_size(partner, round, total_records, world_size);
 
-        if (i_receive) {
-            // Receive partner's already-sorted slice (if non-empty)
-            partner_index.resize(partner_count);
-            if (partner_count > 0) {
-                MPI_Recv(partner_index.data(), partner_count,
-                         MPI_IndexRec, partner, 200 + round,
-                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            partner_buffer.resize(expect_from_partner);
+            if (expect_from_partner > 0) {
+                MPI_Recv(partner_buffer.data(), expect_from_partner, MPI_IndexRec,
+                         partner, 200 + round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
 
-            // Trivial cases
-            if (partner_count == 0) {
-                // nothing to do
+            // Merge my slice with partner's slice.
+            if (expect_from_partner == 0) {
+                // nothing to merge
             } else if (local_sorted_index.empty()) {
-                // I had nothing; partner slice becomes mine
-                local_sorted_index.swap(partner_index);
+                local_sorted_index.swap(partner_buffer);
             } else {
-                // Concatenate [mine | partner] adjacently, then in-place merge
                 const std::size_t mine_n = local_sorted_index.size();
-                concat.resize(mine_n + partner_index.size());
-                std::memcpy(concat.data(),
+                concat_buffer.resize(mine_n + partner_buffer.size());
+                std::memcpy(concat_buffer.data(),
                             local_sorted_index.data(),
                             mine_n * sizeof(IndexRec));
-                std::memcpy(concat.data() + mine_n,
-                            partner_index.data(),
-                            partner_index.size() * sizeof(IndexRec));
-                // merge [0..mine_n-1] with [mine_n..(mine_n+partner_n-1)]
-                merge_records(concat.data(),
+                std::memcpy(concat_buffer.data() + mine_n,
+                            partner_buffer.data(),
+                            partner_buffer.size() * sizeof(IndexRec));
+                // In-place merge adjacent sorted ranges in concat_buffer.
+                merge_records(concat_buffer.data(),
                               /*left=*/0,
                               /*mid=*/mine_n - 1,
-                              /*right=*/concat.size() - 1);
-                local_sorted_index.swap(concat);
-                std::vector<IndexRec>().swap(concat);       // release capacity
+                              /*right=*/concat_buffer.size() - 1);
+                local_sorted_index.swap(concat_buffer);
+                std::vector<IndexRec>().swap(concat_buffer);   // free capacity
             }
-            std::vector<IndexRec>().swap(partner_index);      // release capacity
+            std::vector<IndexRec>().swap(partner_buffer);       // free capacity
         } else {
-            // Sender: send my sorted slice (if any) and become inactive
+            // I am the sender in this pair: send my whole slice and stop participating.
+            const int my_count = static_cast<int>(local_sorted_index.size());
             if (my_count > 0) {
-                MPI_Send(local_sorted_index.data(), my_count,
-                         MPI_IndexRec, partner, 200 + round, MPI_COMM_WORLD);
+                MPI_Send(local_sorted_index.data(), my_count, MPI_IndexRec,
+                         partner, 200 + round, MPI_COMM_WORLD);
             }
             local_sorted_index.clear();
             local_sorted_index.shrink_to_fit();
-            break; // done taking part in the remaining rounds
+            break; // inactive for remaining rounds
         }
-
-        // Optional clarity sync (not required for correctness)
-        MPI_Barrier(MPI_COMM_WORLD);
+        // No Barrier here — some ranks stop participating after sending.
     }
 }
 
 int main(int argc, char** argv)
 {
     MPI_Init(&argc, &argv);
-    const int world_rank = []{ int r; MPI_Comm_rank(MPI_COMM_WORLD, &r); return r; }();
-    const int world_size = []{ int s; MPI_Comm_size(MPI_COMM_WORLD, &s); return s; }();
+    int world_rank = 0, world_size = 1;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    // 0) Parse CLI using the function you already provide in utils.hpp
-    Params params = parse_argv(argc, argv); // (n_records, payload_max, n_threads, cutoff, etc.)
-
-    // Configure OpenMP threads from your CLI (if that’s how your parse_argv works)
+    // Parse CLI using your existing function (every rank does it).
+    Params params = parse_argv(argc, argv);
     if (params.n_threads > 0) omp_set_num_threads(params.n_threads);
 
-    // Create the MPI datatype for IndexRec once
+    // Build a matching MPI datatype for IndexRec once.
     MPI_Datatype MPI_IndexRec = make_mpi_indexrec_type();
 
     BENCH_START(total_time);
 
-    // -------------------------------------------------------------------------
-    // Phase 1 (rank 0 only): Generate (or reuse) and build the full index.
-    // Everyone else waits at the broadcast below.
-    // -------------------------------------------------------------------------
-    std::string input_path;      // created by rank 0 (generate_unsorted_file_mmap)
-    uint64_t    total_records=0; // broadcast to all ranks
-    IndexRec*   root_index = nullptr; // only valid on rank 0
+    // ------------------------------------------------------------------------
+    // Phase 1 (rank 0 only): ensure input exists and build the full IndexRec.
+    // Other ranks do not touch the file; they only receive their index slice.
+    // ------------------------------------------------------------------------
+    std::string input_path;   // only used by rank 0 later when rewriting
+    IndexRec*   full_index_root = nullptr;   // malloc'ed by build_index_mmap on root
 
     if (world_rank == 0) {
-        // 1A) Create / load the input file (your helper)
         BENCH_START(generate_unsorted);
         input_path = generate_unsorted_file_mmap(params.n_records, params.payload_max);
         BENCH_STOP(generate_unsorted);
 
-        // 1B) Build the full IndexRec array for the *whole* file (your helper)
         BENCH_START(build_index);
-        // Signature in your codebase returns a heap buffer (malloc) with N entries
-        root_index = build_index_mmap(input_path, params.n_records);
+        full_index_root = build_index_mmap(input_path, params.n_records);
         BENCH_STOP(build_index);
 
-        if (!root_index) {
+        if (!full_index_root) {
             std::fprintf(stderr, "[rank 0] build_index_mmap failed\n");
             MPI_Abort(MPI_COMM_WORLD, 2);
         }
-        total_records = params.n_records;
     }
 
-    // Share the total record count so every rank can size its receive buffers
-    MPI_Bcast(&total_records, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+    // We avoid a Bcast of N on purpose (every rank trusts params.n_records).
+    const uint64_t total_records = params.n_records;
 
-    // -------------------------------------------------------------------------
-    // Phase 2: Distribute the index using a single MPI_Scatterv of IndexRec.
-    // Each rank pre-computes how many elements it will receive.
-    // -------------------------------------------------------------------------
-    // Compute my slice [start_idx, end_idx) by *record count* (not bytes).
-    const uint64_t start_idx = (total_records * world_rank)     / world_size;
-    const uint64_t end_idx   = (total_records * (world_rank+1)) / world_size;
-    const int      local_n   = static_cast<int>(end_idx - start_idx);
+    // ------------------------------------------------------------------------
+    // Phase 2: Scatter the global index by record-count slices (no Bcast).
+    // Every rank can compute its own receive count deterministically.
+    // ------------------------------------------------------------------------
+    const uint64_t my_start_idx = (total_records * (uint64_t)world_rank)     / world_size;
+    const uint64_t my_end_idx   = (total_records * (uint64_t)(world_rank+1)) / world_size;
+    const int      my_slice_n   = static_cast<int>(my_end_idx - my_start_idx);
 
-    std::vector<IndexRec> local_index(local_n); // my slice buffer
+    std::vector<IndexRec> local_index(my_slice_n);
 
-    std::vector<int> counts, displs;
+    std::vector<int> send_counts, send_displs;
     if (world_rank == 0) {
-        counts.resize(world_size);
-        displs.resize(world_size);
+        send_counts.resize(world_size);
+        send_displs.resize(world_size);
         for (int r = 0; r < world_size; ++r) {
-            const uint64_t s = (total_records * r) / world_size;
-            const uint64_t e = (total_records * (r+1)) / world_size;
-            counts[r] = static_cast<int>(e - s);
-            displs[r] = static_cast<int>(s);
+            const uint64_t s = (total_records * (uint64_t)r)     / world_size;
+            const uint64_t e = (total_records * (uint64_t)(r+1)) / world_size;
+            send_counts[r] = static_cast<int>(e - s);
+            send_displs[r] = static_cast<int>(s);
         }
     }
 
     BENCH_START(distribute_index);
     MPI_Scatterv(
-        /*sendbuf (root only):*/ root_index,
-        /*sendcounts:         */ world_rank==0 ? counts.data() : nullptr,
-        /*displs:             */ world_rank==0 ? displs.data() : nullptr,
-        /*sendtype:           */ MPI_IndexRec,
-        /*recvbuf:            */ local_index.data(),
-        /*recvcount:          */ local_n,
-        /*recvtype:           */ MPI_IndexRec,
-        /*root:               */ 0, MPI_COMM_WORLD);
+        /*sendbuf (root only)*/ full_index_root,
+        /*sendcounts*/           world_rank==0 ? send_counts.data() : nullptr,
+        /*displs*/               world_rank==0 ? send_displs.data() : nullptr,
+        /*sendtype*/             MPI_IndexRec,
+        /*recvbuf*/              local_index.data(),
+        /*recvcount*/            my_slice_n,
+        /*recvtype*/             MPI_IndexRec,
+        /*root*/                 0, MPI_COMM_WORLD);
     BENCH_STOP(distribute_index);
 
-    // Root no longer needs the full index
-    if (world_rank == 0) { std::free(root_index); root_index = nullptr; }
+    if (world_rank == 0) { std::free(full_index_root); full_index_root = nullptr; }
 
-    // -------------------------------------------------------------------------
-    // Phase 3: Local sort (OpenMP tasks) on *each* rank.
-    // We sort our contiguous local_index range in-place by key.
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Phase 3: Local sort (OpenMP tasks) of my contiguous IndexRec slice.
+    // ------------------------------------------------------------------------
     BENCH_START(local_sort);
     #pragma omp parallel
     {
@@ -245,28 +260,24 @@ int main(int argc, char** argv)
     }
     BENCH_STOP(local_sort);
 
-    // -------------------------------------------------------------------------
-    // Phase 4: Distributed log2(P) pairwise merge tree (IndexRec only).
-    // This function is identical for all ranks; receivers grow their slice
-    // by merging partner data; senders ship and finish.
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Phase 4: log2(P) pairwise merge tree (IndexRec only, no Sendrecv).
+    // ------------------------------------------------------------------------
     BENCH_START(distributed_merge);
-    pairwise_merge_tree(local_index, world_rank, world_size, MPI_IndexRec);
+    pairwise_merge_tree(local_index, world_rank, world_size, total_records, MPI_IndexRec);
     BENCH_STOP(distributed_merge);
 
-    // -------------------------------------------------------------------------
-    // Phase 5 (rank 0): Final rewrite of the FULLY sorted output file.
-    // We pass a malloc'd copy because your rewrite_sorted_mmap may free() it.
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Phase 5 (rank 0): rewrite final sorted file using your mmap helper.
+    // We pass a malloc'ed copy if your rewrite takes ownership and free()s it.
+    // ------------------------------------------------------------------------
     if (world_rank == 0) {
         BENCH_START(rewrite_sorted);
 
-        // Prepare destination path (same pattern you used elsewhere is fine too)
         const std::string output_path =
             "files/sorted_" + std::to_string(params.n_records) + "_" +
             std::to_string(params.payload_max) + ".bin";
 
-        // Make a C-style buffer that rewrite_sorted_mmap can free safely.
         IndexRec* final_index = (IndexRec*)std::malloc(local_index.size() * sizeof(IndexRec));
         if (!final_index) {
             std::fprintf(stderr, "[rank 0] malloc for final_index failed\n");
@@ -275,14 +286,13 @@ int main(int argc, char** argv)
         std::memcpy(final_index, local_index.data(),
                     local_index.size() * sizeof(IndexRec));
 
-        // Your helper: rewrite the *actual records* in sorted order to output_path
         if (!rewrite_sorted_mmap(input_path, output_path, final_index, local_index.size())) {
             std::fprintf(stderr, "[rank 0] rewrite_sorted_mmap failed\n");
             MPI_Abort(MPI_COMM_WORLD, 4);
         }
         BENCH_STOP(rewrite_sorted);
 
-        // Optional: correctness check
+        // Optional verification
         BENCH_START(check_if_sorted);
         if (!check_if_sorted_mmap(output_path, total_records)) {
             std::fprintf(stderr, "[rank 0] check_if_sorted_mmap FAILED\n");
