@@ -288,7 +288,7 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
  *  - total_n:   expected number of records
  * Returns a malloc’d IndexRec[total_n], or nullptr on error.
  */
-static IndexRec*
+static inline IndexRec*
 build_index_mmap(const std::string& in_path,
                  std::size_t        total_n)
 {

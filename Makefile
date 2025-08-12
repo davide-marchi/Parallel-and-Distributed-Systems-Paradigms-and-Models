@@ -37,13 +37,15 @@ OMPOPTS := -fopenmp
 FASTFLOW_CPPFLAGS := -I./fastflow
 
 # ------------------------------------------------------------------ sources / bins
-SRCS := openmp_seq_mmap.cpp \
-        fastflow_seq_mmap.cpp \
+# NOTE: assumes you renamed the source files accordingly.
+SRCS := omp_seq_mmap.cpp \
+        ff_seq_mmap.cpp \
         sequential_seq_mmap.cpp \
-        mpi_omp_seq_mmap.cpp
+        mpi_omp_seq_mmap.cpp \
+        mpi_omp_mmap.cpp
 #       mpi_ff.cpp
 
-BINS := openmp_seq_mmap fastflow_seq_mmap sequential_seq_mmap mpi_omp_seq_mmap
+BINS := omp_seq_mmap ff_seq_mmap sequential_seq_mmap mpi_omp_seq_mmap mpi_omp_mmap
 #      mpi_ff
 
 # ------------------------------------------------------------------ directories for artifacts
@@ -67,21 +69,19 @@ $(BIN)/%: $(BUILD)/%.o | $(BIN)
 
 # ------------------------------------------------------------------ target-specific tweaks
 
-# FastFlow TU needs only the FastFlow include at compile-time
-$(BUILD)/fastflow_seq_mmap.o: CPPFLAGS += $(FASTFLOW_CPPFLAGS)
-# Future FastFlow+MPI target
-# $(BUILD)/mpi_ff.o:            CPPFLAGS += $(FASTFLOW_CPPFLAGS)
+# Any ff_* TU gets FastFlow include at compile-time
+$(BUILD)/ff_%.o: CPPFLAGS += $(FASTFLOW_CPPFLAGS)
 
-# OpenMP (sequential/OpenMP binary)
-$(BUILD)/openmp_seq_mmap.o: CXXFLAGS += $(OMPOPTS)
-$(BIN)/openmp_seq_mmap:     LDLIBS   += $(OMPOPTS)
+# Any omp_* target gets OpenMP at compile and link
+$(BUILD)/omp_%.o: CXXFLAGS += $(OMPOPTS)
+$(BIN)/omp_%:     LDLIBS   += $(OMPOPTS)
 
-# MPI+OpenMP: compile the TU with MPICXX (so <mpi.h> is found) and link with MPICXX
-$(BUILD)/mpi_omp_seq_mmap.o: mpi_omp_seq_mmap.cpp | $(BUILD)
-	$(MPICXX) $(CPPFLAGS) $(CXXFLAGS) $(OMPOPTS) -MMD -MP -c $< -o $@
+# MPI+OpenMP (compile/link with MPICXX and -fopenmp)
+$(BUILD)/mpi_omp_%.o: CXX := $(MPICXX)
+$(BUILD)/mpi_omp_%.o: CXXFLAGS += $(OMPOPTS)
 
-$(BIN)/mpi_omp_seq_mmap: $(BUILD)/mpi_omp_seq_mmap.o | $(BIN)
-	$(MPICXX) $(LDFLAGS) $^ -o $@ $(LDLIBS) $(OMPOPTS)
+$(BIN)/mpi_omp_%: CXX := $(MPICXX)
+$(BIN)/mpi_omp_%: LDLIBS += $(OMPOPTS)
 
 # Future: MPI+FastFlow binary
 # $(BUILD)/mpi_ff.o: mpi_ff.cpp | $(BUILD)
