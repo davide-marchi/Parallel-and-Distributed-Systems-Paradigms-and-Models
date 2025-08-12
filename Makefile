@@ -39,13 +39,14 @@ FASTFLOW_CPPFLAGS := -I./fastflow
 # ------------------------------------------------------------------ sources / bins
 # NOTE: assumes you renamed the source files accordingly.
 SRCS := omp_seq_mmap.cpp \
+		omp_mmap.cpp \
         ff_seq_mmap.cpp \
         sequential_seq_mmap.cpp \
         mpi_omp_seq_mmap.cpp \
         mpi_omp_mmap.cpp
 #       mpi_ff.cpp
 
-BINS := omp_seq_mmap ff_seq_mmap sequential_seq_mmap mpi_omp_seq_mmap mpi_omp_mmap
+BINS := omp_seq_mmap omp_mmap ff_seq_mmap sequential_seq_mmap mpi_omp_seq_mmap mpi_omp_mmap
 #      mpi_ff
 
 # ------------------------------------------------------------------ directories for artifacts
