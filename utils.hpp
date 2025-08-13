@@ -23,6 +23,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <mutex>
+#include <condition_variable>
+#include <functional>
+
 /*---------------------------------------------------------------------------*/
 /* 1.  Run-time parameters                                                   */
 /*---------------------------------------------------------------------------*/
@@ -64,6 +68,32 @@ struct IndexRec {
     unsigned long key;  // same as in Record
     uint64_t      offset; 
     uint32_t      len;     // payload length
+};
+
+// Simple progress gate: wait until at least `need` records are ready,
+// and allow the producer to notify progress.
+struct ProgressGate {
+    std::mutex m;
+    std::condition_variable cv;
+    std::size_t filled = 0;
+
+    void reset() {
+        std::lock_guard<std::mutex> lk(m);
+        filled = 0;
+    }
+    void notify(std::size_t filled_now) {
+        fprintf(stdout, "Notifying progress: %zu records ready\n", filled_now);
+        {
+            std::lock_guard<std::mutex> lk(m);
+            filled = filled_now;
+        }
+        cv.notify_all();
+    }
+    void wait_until(std::size_t need) {
+        std::unique_lock<std::mutex> lk(m);
+        fprintf(stdout, "Waiting for %zu records...\n", need);
+        cv.wait(lk, [&]{ return filled >= need; });
+    }
 };
 
 /*---------------------------------------------------------------------------*/
@@ -288,73 +318,67 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
  *  - total_n:   expected number of records
  * Returns a malloc’d IndexRec[total_n], or nullptr on error.
  */
-static inline IndexRec*
-build_index_mmap(const std::string& in_path,
-                 std::size_t        total_n)
+// 1) PREALLOC + optional progress (your current function; keep as-is)
+inline void build_index_mmap(const std::string& path,
+                             IndexRec* idx,
+                             std::size_t n,
+                             int notify_every = 0,
+                             ProgressGate* gate = nullptr)
 {
-    // 1) open & stat
-    int fd = ::open(in_path.c_str(), O_RDONLY);
-    if (fd < 0) {
-        std::perror("[build_index_mmap] open");
-        return nullptr;
+  int fd = ::open(path.c_str(), O_RDONLY);
+  if (fd < 0) { std::perror("open"); std::exit(1); }
+  struct stat st{};
+  if (fstat(fd, &st) < 0) { std::perror("fstat"); std::exit(1); }
+  const std::size_t file_sz = static_cast<std::size_t>(st.st_size);
+
+  void* map = ::mmap(nullptr, file_sz, PROT_READ, MAP_SHARED, fd, 0);
+  if (map == MAP_FAILED) { std::perror("mmap"); std::exit(1); }
+
+  const unsigned char* base = static_cast<const unsigned char*>(map);
+
+  std::size_t pos = 0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const std::size_t rec_offset = pos;
+
+    unsigned long key;
+    std::memcpy(&key, base + pos, sizeof(unsigned long));
+    pos += sizeof(unsigned long);
+
+    uint32_t len;
+    std::memcpy(&len, base + pos, sizeof(uint32_t));
+    pos += sizeof(uint32_t);
+
+    idx[i].key    = key;
+    idx[i].offset = rec_offset;
+    idx[i].len    = len;
+
+    pos += len;
+
+    if (gate && notify_every > 0) {
+      const std::size_t filled_now = i + 1;
+      if (filled_now % static_cast<std::size_t>(notify_every) == 0) {
+        gate->notify(filled_now);
+      }
     }
-    struct stat st;
-    if (fstat(fd, &st) < 0) {
-        std::perror("[build_index_mmap] fstat");
-        close(fd);
-        return nullptr;
-    }
-    size_t file_sz = st.st_size;
+  }
 
-    // 2) mmap entire file
-    void* map = mmap(nullptr, file_sz,
-                     PROT_READ, MAP_SHARED, fd, 0);
-    if (map == MAP_FAILED) {
-        std::perror("[build_index_mmap] mmap");
-        close(fd);
-        return nullptr;
-    }
-    const char* data = static_cast<const char*>(map);
+  if (gate) gate->notify(n);
 
-    // 3) allocate exact‐size index array
-    IndexRec* idx = static_cast<IndexRec*>(
-                        std::malloc(total_n * sizeof(IndexRec)));
-    if (!idx) {
-        std::cerr << "[build_index_mmap] malloc failed\n";
-        munmap(map, file_sz);
-        close(fd);
-        return nullptr;
-    }
+  ::munmap(const_cast<unsigned char*>(base), file_sz);
+  ::close(fd);
+}
 
-    // 4) one pass: parse each record in memory
-    size_t pos = 0;
-    for (size_t i = 0; i < total_n; ++i) {
-        if (pos + sizeof(unsigned long) + sizeof(uint32_t) > file_sz) {
-            std::cerr << "[build_index_mmap] unexpected EOF at rec " << i << "\n";
-            free(idx);
-            munmap(map, file_sz);
-            close(fd);
-            return nullptr;
-        }
 
-        // read key & len from mapped memory
-        unsigned long key = *reinterpret_cast<const unsigned long*>(data + pos);
-        uint32_t      len = *reinterpret_cast<const uint32_t*>     (data + pos + sizeof(unsigned long));
+// 2) ALLOCATING OVERLOAD (backward compatible with old seq code)
+inline IndexRec* build_index_mmap(const std::string& path, std::size_t n)
+{
+  // allocate with malloc because rewrite_sorted_mmap() calls free(idx)
+  auto* idx = static_cast<IndexRec*>(std::malloc(n * sizeof(IndexRec)));
+  if (!idx) { std::perror("malloc"); std::exit(1); }
 
-        // record in index
-        idx[i].key    = key;
-        idx[i].offset = pos;
-        idx[i].len    = len;
-
-        // advance pos over header + payload
-        pos += sizeof(unsigned long) + sizeof(uint32_t) + len;
-    }
-
-    // 5) cleanup mmap (we still hold our own copy of offsets/lengths)
-    munmap(map, file_sz);
-    close(fd);
-
-    return idx;
+  // delegate to the prealloc version with default behavior (no notifications)
+  build_index_mmap(path, idx, n, /*notify_every=*/0, /*gate=*/nullptr);
+  return idx;
 }
 
 
