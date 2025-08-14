@@ -82,7 +82,7 @@ struct ProgressGate {
         filled = 0;
     }
     void notify(std::size_t filled_now) {
-        fprintf(stdout, "Notifying progress: %zu records ready\n", filled_now);
+        // fprintf(stdout, "Notifying progress: %zu records ready\n", filled_now);
         {
             std::lock_guard<std::mutex> lk(m);
             filled = filled_now;
@@ -91,7 +91,7 @@ struct ProgressGate {
     }
     void wait_until(std::size_t need) {
         std::unique_lock<std::mutex> lk(m);
-        fprintf(stdout, "Waiting for %zu records...\n", need);
+        // fprintf(stdout, "Waiting for %zu records...\n", need);
         cv.wait(lk, [&]{ return filled >= need; });
     }
 };
