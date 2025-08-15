@@ -2,23 +2,9 @@
 // Build: mpic++ -O3 -std=c++20 -fopenmp mpi_pairwise_tree_oneshot.cpp -o bin/mpi_pairwise_tree
 // Run (Slurm): srun -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
 
+#include "utils.hpp" // parse_argv, BENCH_* timers, IndexRec { key, offset, len }, sort_records, merge_records, generate_unsorted_file_mmap, rewrite_sorted_mmap, check_if_sorted_mmap
 #include <mpi.h>
 #include <omp.h>
-#include <vector>
-#include <string>
-#include <algorithm>
-#include <cstdint>
-#include <cstring>
-#include <cstdlib>
-#include <iostream>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#include "utils.hpp" // parse_argv, BENCH_* timers, IndexRec { key, offset, len },
-                     // sort_records, merge_records,
-                     // generate_unsorted_file_mmap, rewrite_sorted_mmap, check_if_sorted_mmap
 
 // ============================================================================
 // OpenMP task mergesort for IndexRec — reuses your utils merge/sort primitives

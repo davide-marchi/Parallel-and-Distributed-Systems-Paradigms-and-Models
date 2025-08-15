@@ -10,12 +10,9 @@
 //      g++ -std=c++20 -O3 -Wall -ffast-math -pthread -I./fastflow -MMD -MP ff_mmap.cpp -o bin/fastflow
 // -----------------------------------------------------------------------------
 
+#include "utils.hpp"
 #include <ff/ff.hpp>
 #include <ff/farm.hpp>
-#include "utils.hpp"
-#include <vector>
-#include <string>
-#include <cstdlib>
 
 using namespace ff;
 

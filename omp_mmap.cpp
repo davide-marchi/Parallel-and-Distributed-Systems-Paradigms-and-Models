@@ -7,18 +7,6 @@
 #include "utils.hpp"
 #include <omp.h>
 
-#include <condition_variable>
-#include <cstdint>
-#include <cstring>
-#include <fcntl.h>
-#include <mutex>
-#include <string>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <cstdlib>  // for std::malloc
-
-
 /* --------------------- mergesort tasks with gating ----------------------- */
 static inline void mergesort_task(IndexRec* base,
                                   std::size_t left,

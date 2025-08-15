@@ -12,10 +12,9 @@
 //          fastflow.cpp utils.o -o bin/fastflow
 // -----------------------------------------------------------------------------
 
+#include "utils.hpp"
 #include <ff/ff.hpp>
 #include <ff/farm.hpp>
-#include "utils.hpp"
-#include <vector>
 
 using namespace ff;
 

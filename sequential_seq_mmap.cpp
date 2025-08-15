@@ -1,6 +1,4 @@
 #include "utils.hpp"   // Param / parse_argv, BENCH macros, and all the mmap-helper functions
-#include <iostream>    // std::cout
-#include <string>      // std::string, std::to_string
 
 //------------------------------------------------------------------------------
 //  Main                                                                        

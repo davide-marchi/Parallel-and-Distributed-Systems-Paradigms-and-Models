@@ -1,31 +1,28 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
-#include <cstdint>
-#include <cstdlib>
-#include <cstdio>
-#include <unistd.h>       // getopt / getopt_long
-#include <getopt.h>
-#include <algorithm>
-#include <random>
-#include <ctime>
-#include <chrono>
-#include <memory>     // std::unique_ptr
-#include <cstring>    // std::memcpy
-#include <string>      // for std::stoull, std::stoul
+#include <cstddef>              // std::size_t
+#include <cstdint>              // std::uint32_t, std::uint64_t
+#include <cstdlib>              // std::malloc, std::free, std::exit
+#include <cstdio>               // std::printf, std::puts, std::perror
+#include <string>               // std::string, stoull, stoul, to_string
+#include <cstring>              // std::memcpy
+#include <algorithm>            // std::sort, std::inplace_merge
+#include <random>               // std::mt19937, std::uniform_int_distribution
+#include <chrono>               // timing (BENCH_* macros)
+#include <iostream>             // std::cout, std::cerr
+#include <vector>               // std::vector
+#include <filesystem>           // create_directories, path ops
+#include <mutex>                // std::mutex, lock_guard, unique_lock
+#include <condition_variable>   // std::condition_variable
 
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <vector>
+// POSIX
+#include <sys/mman.h>           // mmap, munmap
+#include <sys/stat.h>           // fstat, struct stat
+#include <fcntl.h>              // open, O_* flags
+#include <unistd.h>             // close, unlink, ftruncate, getopt
+#include <getopt.h>             // getopt_long, struct option
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <mutex>
-#include <condition_variable>
-#include <functional>
 
 /*---------------------------------------------------------------------------*/
 /* 1.  Run-time parameters                                                   */
@@ -245,8 +242,8 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
     //BENCH_START(generate_arrays);
     std::vector<unsigned long> keys (total_n);
     std::vector<uint32_t>      lens (total_n);
-    size_t exact_size = 0;
-    for (size_t i = 0; i < total_n; ++i) {
+    std::size_t exact_size = 0;
+    for (std::size_t i = 0; i < total_n; ++i) {
         keys[i] = static_cast<unsigned long>( key_gen(rng) );
         lens[i] = static_cast<uint32_t>      ( len_gen(rng) );
         exact_size += KEY_SZ + LEN_SZ + lens[i];
@@ -280,9 +277,9 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
     // 4) prepare a single-record buffer: header + max-payload
     //BENCH_START(generate_records);
     std::vector<char> record_buf(KEY_SZ + LEN_SZ + payload_max);
-    size_t offset = 0;
+    std::size_t offset = 0;
 
-    for (size_t i = 0; i < total_n; ++i) {
+    for (std::size_t i = 0; i < total_n; ++i) {
         unsigned long key = keys[i];
         uint32_t      len = lens[i];
 
@@ -296,7 +293,7 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
         }
 
         // one bulk copy into the mmap’d file
-        size_t rec_sz = KEY_SZ + LEN_SZ + len;
+        std::size_t rec_sz = KEY_SZ + LEN_SZ + len;
         std::memcpy(map + offset, record_buf.data(), rec_sz);
         offset += rec_sz;
     }
@@ -405,7 +402,7 @@ rewrite_sorted_mmap(const std::string& in_path,
     if (fd_in < 0) { perror("open in"); return false; }
     struct stat st;
     if (fstat(fd_in, &st) < 0) { perror("fstat in"); close(fd_in); return false; }
-    size_t in_size = st.st_size;
+    std::size_t in_size = st.st_size;
 
     // 2) mmap entire input read-only
     char* in_map = (char*)mmap(nullptr, in_size,
@@ -413,8 +410,8 @@ rewrite_sorted_mmap(const std::string& in_path,
     if (in_map == MAP_FAILED) { perror("mmap in"); close(fd_in); return false; }
 
     // 3) compute total output size
-    size_t out_size = 0;
-    for (size_t i = 0; i < n_idx; ++i) {
+    std::size_t out_size = 0;
+    for (std::size_t i = 0; i < n_idx; ++i) {
         out_size += sizeof(idx[i].key)
                   + sizeof(idx[i].len)
                   + idx[i].len;
@@ -434,10 +431,10 @@ rewrite_sorted_mmap(const std::string& in_path,
     //BENCH_STOP(open_and_mmap_output);
 
     // 5) copy each record in one memcpy
-    size_t out_off = 0;
-    for (size_t i = 0; i < n_idx; ++i) {
+    std::size_t out_off = 0;
+    for (std::size_t i = 0; i < n_idx; ++i) {
         IndexRec& r = idx[i];
-        size_t rec_size = sizeof(r.key) + sizeof(r.len) + r.len;
+        std::size_t rec_size = sizeof(r.key) + sizeof(r.len) + r.len;
 
         // direct memcpy from input-mapped region
         std::memcpy(out_map + out_off,
@@ -468,15 +465,15 @@ static bool check_if_sorted_mmap(const std::string& path,
 
     struct stat st;
     if (fstat(fd, &st) < 0) { perror("fstat"); close(fd); return false; }
-    size_t sz = st.st_size;
+    std::size_t sz = st.st_size;
 
     char* map = (char*)mmap(nullptr, sz,
                             PROT_READ, MAP_SHARED, fd, 0);
     if (map == MAP_FAILED) { perror("mmap"); close(fd); return false; }
 
-    size_t pos = 0;
+    std::size_t pos = 0;
     unsigned long prev_key = 0;
-    for (size_t i = 0; i < total_n; ++i) {
+    for (std::size_t i = 0; i < total_n; ++i) {
         if (pos + sizeof(unsigned long)+sizeof(uint32_t) > sz) {
             std::cerr << "Unexpected EOF at record " << i << "\n";
             munmap(map, sz);
