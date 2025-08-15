@@ -126,6 +126,7 @@ int main(int argc, char** argv)
         farm.add_workers(workers);
         farm.remove_collector();
         farm.wrap_around();
+        farm.set_scheduling_ondemand();
 
         if (farm.run_and_wait_end() < 0) {
             error("FastFlow execution failed\n");
