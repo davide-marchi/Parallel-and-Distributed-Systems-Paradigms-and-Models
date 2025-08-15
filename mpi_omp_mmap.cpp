@@ -152,6 +152,7 @@ static void root_build_and_send_full_slices(const std::string& input_path,
                                             MPI_Datatype       MPI_IndexRec,
                                             std::vector<IndexRec>& out_local_slice)
 {
+    BENCH_START(reading);
     // 1) Open and mmap input (same pattern as your build_index_mmap).
     int fd = ::open(input_path.c_str(), O_RDONLY);
     if (fd < 0) { std::perror("[oneshot] open"); MPI_Abort(MPI_COMM_WORLD, 101); }
@@ -177,7 +178,7 @@ static void root_build_and_send_full_slices(const std::string& input_path,
     // 3) Isend requests for ranks > 0; initialize null
     std::vector<MPI_Request> send_req(world_size, MPI_REQUEST_NULL);
 
-    BENCH_START(build_index); // timing: parse + immediate sends when a slice completes
+    //BENCH_START(build_index); // timing: parse + immediate sends when a slice completes
 
     // 4) Single pass over the file: fill slices in order.
     size_t pos = 0;
@@ -208,24 +209,26 @@ static void root_build_and_send_full_slices(const std::string& input_path,
         pos += sizeof(unsigned long) + sizeof(uint32_t) + len;
     }
 
-    BENCH_STOP(build_index);
+    // BENCH_STOP(build_index);
 
     // 5) Root keeps its own slice locally
     out_local_slice.swap(per_rank[0]);
 
     // 6) Ensure all Isends completed before unmapping
-    BENCH_START(distribute_index);
+    // BENCH_START(distribute_index);
     for (int r = 1; r < world_size; ++r) {
         if (send_req[r] != MPI_REQUEST_NULL) {
             MPI_Wait(&send_req[r], MPI_STATUS_IGNORE);
             send_req[r] = MPI_REQUEST_NULL;
         }
     }
-    BENCH_STOP(distribute_index);
+    // BENCH_STOP(distribute_index);
 
     // 7) Clean up mapping
     munmap(map, file_sz);
     close(fd);
+
+    BENCH_STOP(reading);
 }
 
 /**
@@ -241,10 +244,10 @@ static void nonroot_recv_full_slice(int                my_rank,
     const int expected = count_for_rank(my_rank, total_records, world_size);
     out_local_slice.resize(expected);
 
-    BENCH_START(distribute_index);
+    // BENCH_START(distribute_index);
     MPI_Recv(out_local_slice.data(), expected, MPI_IndexRec,
          0, TAG_FULL_SLICE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    BENCH_STOP(distribute_index);
+    // BENCH_STOP(distribute_index);
 }
 
 // ============================================================================
@@ -252,17 +255,16 @@ static void nonroot_recv_full_slice(int                my_rank,
 // ============================================================================
 int main(int argc, char** argv)
 {
+
+    Params params = parse_argv(argc, argv);
+    if (params.n_threads > 0) omp_set_num_threads(params.n_threads);
+
     MPI_Init(&argc, &argv);
     int world_rank = 0, world_size = 1;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    Params params = parse_argv(argc, argv);
-    if (params.n_threads > 0) omp_set_num_threads(params.n_threads);
-
     MPI_Datatype MPI_IndexRec = make_mpi_indexrec_type();
-
-    BENCH_START(total_time);
 
     const uint64_t total_records = params.n_records;
 
@@ -277,6 +279,8 @@ int main(int argc, char** argv)
     // ----------------- Phase 2: one-shot index distribution ------------------
     std::vector<IndexRec> local_index;
 
+    BENCH_START(reading_and_sorting);
+
     if (world_rank == 0) {
         root_build_and_send_full_slices(
             input_path, total_records, world_size, MPI_IndexRec, local_index);
@@ -287,7 +291,7 @@ int main(int argc, char** argv)
     }
 
     // ----------------- Phase 3: local sort (OpenMP mergesort) ----------------
-    BENCH_START(local_sort);
+    // BENCH_START(local_sort);
     #pragma omp parallel
     {
         #pragma omp single nowait
@@ -296,16 +300,18 @@ int main(int argc, char** argv)
                        /*right=*/local_index.empty() ? 0 : local_index.size() - 1,
                        /*cutoff=*/params.cutoff);
     }
-    BENCH_STOP(local_sort);
+    // BENCH_STOP(local_sort);
 
     // ----------------- Phase 4: pairwise merge tree (IndexRec only) ----------
-    BENCH_START(distributed_merge);
+    // BENCH_START(distributed_merge);
     pairwise_merge_tree(local_index, world_rank, world_size, total_records, MPI_IndexRec);
-    BENCH_STOP(distributed_merge);
+    // BENCH_STOP(distributed_merge);
 
     // ----------------- Phase 5: final rewrite (rank 0) -----------------------
     if (world_rank == 0) {
-        BENCH_START(rewrite_sorted);
+        BENCH_STOP(reading_and_sorting);
+
+        BENCH_START(writing);
 
         const std::string output_path =
             "files/sorted_" + std::to_string(params.n_records) + "_" +
@@ -320,7 +326,7 @@ int main(int argc, char** argv)
             std::fprintf(stderr, "[rank 0] rewrite_sorted_mmap failed\n");
             MPI_Abort(MPI_COMM_WORLD, 202);
         }
-        BENCH_STOP(rewrite_sorted);
+        BENCH_STOP(writing);
 
         BENCH_START(check_if_sorted);
         if (!check_if_sorted_mmap(output_path, total_records)) {
@@ -329,8 +335,6 @@ int main(int argc, char** argv)
         }
         BENCH_STOP(check_if_sorted);
     }
-
-    BENCH_STOP(total_time);
 
     MPI_Type_free(&MPI_IndexRec);
     MPI_Finalize();

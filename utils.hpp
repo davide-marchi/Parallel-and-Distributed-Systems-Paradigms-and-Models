@@ -322,6 +322,7 @@ inline void build_index_mmap(const std::string& path,
                              int notify_every = 0,
                              ProgressGate* gate = nullptr)
 {
+  BENCH_START(reading);
   int fd = ::open(path.c_str(), O_RDONLY);
   if (fd < 0) { std::perror("open"); std::exit(1); }
   struct stat st{};
@@ -363,6 +364,7 @@ inline void build_index_mmap(const std::string& path,
 
   ::munmap(const_cast<unsigned char*>(base), file_sz);
   ::close(fd);
+  BENCH_STOP(reading);
 }
 
 

@@ -42,22 +42,18 @@ int main(int argc, char** argv)
   Params opt = parse_argv(argc, argv);
   if (opt.n_threads > 0) omp_set_num_threads(opt.n_threads);
 
-  BENCH_START(total_time);
-
   // 1) Generate unsorted file (unchanged)
-  BENCH_START(generate);
+  BENCH_START(generate_unsorted);
   std::string unsorted_file = generate_unsorted_file_mmap(opt.n_records, opt.payload_max);
-  BENCH_STOP(generate);
+  BENCH_STOP(generate_unsorted);
+
+  BENCH_START(reading_and_sorting);
 
   // 2+3) Overlap index build and mergesort
   IndexRec* idx = static_cast<IndexRec*>(std::malloc(opt.n_records * sizeof(IndexRec)));
   if (!idx) { std::perror("malloc"); std::exit(1); }
 
-  BENCH_START(index_plus_sort);
-
   {
-    
-
     #pragma omp parallel
     {
       #pragma omp single
@@ -79,21 +75,20 @@ int main(int argc, char** argv)
     }
   }
 
-  BENCH_STOP(index_plus_sort);
+  BENCH_STOP(reading_and_sorting);
 
   // 4) Rewrite sorted file (unchanged; rewrite_sorted_mmap frees idx)
-  BENCH_START(rewrite_sorted);
+  BENCH_START(writing);
   const std::string sorted_file =
       "files/sorted_" + std::to_string(opt.n_records) + "_"
                        + std::to_string(opt.payload_max) + ".bin";
   rewrite_sorted_mmap(unsorted_file, sorted_file, idx, opt.n_records);
-  BENCH_STOP(rewrite_sorted);
+  BENCH_STOP(writing);
 
   // 5) Verify (unchanged; will also unlink the sorted file in your helpers)
   BENCH_START(check_if_sorted);
   check_if_sorted_mmap(sorted_file, opt.n_records);
   BENCH_STOP(check_if_sorted);
 
-  BENCH_STOP(total_time);
   return 0;
 }
