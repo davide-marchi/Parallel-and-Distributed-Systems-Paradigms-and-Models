@@ -2,34 +2,35 @@
 #
 # scripts/run_array_any.sh
 #
-# WHAT IT DOES
-#   Submits ONE Slurm job array to run your chosen binary over:
-#   TRIALS × RECORDS × PAYLOAD_MAX × CUTOFFS × THREADS
-#   Appends a CSV row per task to results/<binary>.csv (file-locked).
+# ONE script to launch a single Slurm job array for ANY of your executables:
+#   --bin bin/sequential_seq_mmap
+#   --bin bin/openmp_seq_mmap
+#   --bin bin/fastflow_seq_mmap
 #
-# USAGE
+# It sweeps TRIALS × RECORDS × PAYLOAD_MAX × CUTOFFS × THREADS and appends
+# a row per task into results/<binary>.csv (with file locking).
+#
+# Examples:
 #   ./scripts/run_array_any.sh --bin bin/sequential_seq_mmap
-#   ./scripts/run_array_any.sh --bin bin/openmp_seq_mmap
-#   ./scripts/run_array_any.sh --bin bin/fastflow_seq_mmap
 #   ./scripts/run_array_any.sh --bin bin/openmp_seq_mmap --max-parallel 4
 #
-# LOGS
-#   Single log per array (not per-task): logs/<binary>_%A.out / .err
-#   Note: if you raise --max-parallel > 1, output interleaves in that one file.
+# Logging:
+#   Single log per array: logs/<binary>_%A.out and logs/<binary>_%A.err
+#   (We also force --open-mode=append so earlier tasks aren't overwritten.)
 #
 #SBATCH --job-name=grid
 #SBATCH --cpus-per-task=1              # overridden at submit to max(THREADS)
 #SBATCH --time=00:20:00
-#SBATCH --output=logs/any_%A_%a.out    # overridden at submit (single file)
-#SBATCH --error=logs/any_%A_%a.err     # overridden at submit (single file)
+#SBATCH --output=logs/any_%A_%a.out    # overridden at submit (single .out)
+#SBATCH --error=logs/any_%A_%a.err     # overridden at submit (single .err)
 
 set -euo pipefail
 
 # ---------------------- EDIT YOUR SWEEP HERE ----------------------
-TRIALS=(1 2 3)
-RECORDS=(10000 100000 1000000 10000000 100000000)
-PAYLOAD_MAX=(8 16 32 64 128)
-CUTOFFS=(1000 10000 100000)
+TRIALS=(1)
+RECORDS=(100000 1000000 10000000 100000000)
+PAYLOAD_MAX=(8 32 128)
+CUTOFFS=(10000)
 THREADS=(1 2 4 8 16 32)   # We ALWAYS reserve cpus-per-task = max(THREADS)
 # -----------------------------------------------------------------
 
@@ -68,13 +69,15 @@ if [[ "$mode" == "submit" ]]; then
 
   echo "Submitting ONE array for ${BIN_BASENAME}: 0-$((TOTAL-1))%${max_parallel}"
   echo "cpus-per-task = max(THREADS) = ${max_threads}"
-  # One .out/.err for the whole array (no %a)
+
+  # One .out/.err for the whole array, append, fixed job-name=grid
   sbatch \
     --array=0-$((TOTAL-1))%${max_parallel} \
     --cpus-per-task="${max_threads}" \
     --job-name="grid" \
     --output="logs/${BIN_BASENAME}_%A.out" \
     --error="logs/${BIN_BASENAME}_%A.err" \
+    --open-mode=append \
     "$SCRIPT_PATH" --worker --bin "$BIN"
   exit 0
 fi
@@ -115,28 +118,36 @@ if echo "$BIN_BASENAME" | grep -qiE 'omp|openmp'; then
   export OMP_NUM_THREADS="$T"
 fi
 
-echo "Task $SLURM_ARRAY_TASK_ID  bin=$BIN_BASENAME  trial=$trial  N=$n  P=$p  C=$c  T=$T" >&2
+# --- status line to STDOUT (so it lands in the single .out file) ---
+echo "[task $SLURM_ARRAY_TASK_ID] bin=$BIN_BASENAME  trial=$trial  N=$n  P=$p  C=$c  T=$T"
 
-OUT="$(
-  srun --exclusive -n1 --cpu-bind=cores "$BIN" \
-       -n "$n" -p "$p" -c "$c" -t "$T"
-)"
+# --- run the program; capture output AND also print it to .out ---
+tmplog="$(mktemp)"
+# capture both stdout+stderr to a temp file
+if srun --exclusive -n1 --cpu-bind=cores "$BIN" -n "$n" -p "$p" -c "$c" -t "$T" >"$tmplog" 2>&1; then
+  : # ok
+else
+  echo "[task $SLURM_ARRAY_TASK_ID] WARNING: program exited non-zero" >&2
+fi
+# show the program output in the .out file (appended as we forced --open-mode=append)
+cat "$tmplog"
+# also keep it in a variable for parsing
+OUT="$(cat "$tmplog")"
+rm -f "$tmplog"
 
 # --------------------- TIMERS + SORTED FLAG ----------------------
 # Match bracketed labels exactly, e.g. "[reading] 123.456 ms"
+# number regex
 num='[0-9]+(\.[0-9]+)?'
-gen_ms="$(echo "$OUT" | grep -m1 '\[generate_unsorted\]'    | grep -oE "$num" || echo 0)"
-rd_ms="$( echo "$OUT" | grep -m1 '\[reading\]'              | grep -oE "$num" || echo 0)"   # new
-rs_ms="$( echo "$OUT" | grep -m1 '\[reading_and_sorting\]'  | grep -oE "$num" || echo 0)"
-wr_ms="$( echo "$OUT" | grep -m1 '\[writing\]'              | grep -oE "$num" || echo 0)"
-chk_ms="$(echo "$OUT" | grep -m1 '\[check_if_sorted\]'      | grep -oE "$num" || echo 0)"
+gen_ms="$(echo "$OUT" | grep -m1 -E '\[generate_unsorted[[:space:]]*\]'    | grep -oE "$num" | head -n1 || echo 0)"
+rd_ms="$( echo "$OUT" | grep -m1 -E '\[reading[[:space:]]*\]'              | grep -oE "$num" | head -n1 || echo 0)"
+rs_ms="$( echo "$OUT" | grep -m1 -E '\[reading_and_sorting[[:space:]]*\]'  | grep -oE "$num" | head -n1 || echo 0)"
+wr_ms="$( echo "$OUT" | grep -m1 -E '\[writing[[:space:]]*\]'              | grep -oE "$num" | head -n1 || echo 0)"
+chk_ms="$(echo "$OUT" | grep -m1 -E '\[check_if_sorted[[:space:]]*\]'      | grep -oE "$num" | head -n1 || echo 0)"
 
 # Presence of the success line
-if echo "$OUT" | grep -q 'File is sorted\.'; then
-  sorted=1
-else
-  sorted=0
-fi
+sorted=0
+echo "$OUT" | grep -q 'File is sorted\.' && sorted=1
 
 # --------------------- CSV (single writer at a time) --------------
 flock -x "$OUTCSV" -c '
@@ -148,4 +159,4 @@ flock -x "$OUTCSV" -c '
     '"${gen_ms:-0}"' '"${rd_ms:-0}"' '"${rs_ms:-0}"' '"${wr_ms:-0}"' '"${chk_ms:-0}"' '"$sorted"' >> "'"$OUTCSV"'"
 '
 
-echo "Done $SLURM_ARRAY_TASK_ID → $OUTCSV" >&2
+echo "[task $SLURM_ARRAY_TASK_ID] done  → $OUTCSV"
