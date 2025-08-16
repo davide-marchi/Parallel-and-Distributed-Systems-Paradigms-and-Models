@@ -20,7 +20,7 @@
 #
 #SBATCH --job-name=grid
 #SBATCH --cpus-per-task=1              # overridden at submit to max(THREADS)
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --output=logs/any_%A_%a.out    # overridden at submit (single .out)
 #SBATCH --error=logs/any_%A_%a.err     # overridden at submit (single .err)
 
