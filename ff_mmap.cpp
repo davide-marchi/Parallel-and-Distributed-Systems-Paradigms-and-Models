@@ -1,14 +1,8 @@
-// ff_mmap.cpp — Task-graph MergeSort with FastFlow farm+feedback + overlapped index build
-// -----------------------------------------------------------------------------
-//  Overlap strategy:
-//  • Emitter sends a special BuildIndex task FIRST.
-//  • One worker runs build_index_mmap(…, notify_every=cutoff, gate) progressively.
-//  • Other workers can start on MergeSort leaves but will gate (wait_once)
-//    until g_gate.filled >= R+1, then sort. Merges need no extra waits.
-// -----------------------------------------------------------------------------
-//  Build:
-//      g++ -std=c++20 -O3 -Wall -ffast-math -pthread -I./fastflow -MMD -MP ff_mmap.cpp -o bin/fastflow
-// -----------------------------------------------------------------------------
+// FastFlow mmap mergesort with farm and feedback
+// Overlap index build with sorting via a shared progress gate
+// Emitter sends one BuildIndex task first and a worker builds while notifying progress
+// Other workers sort leaves once their slice is indexed and merges proceed as children return
+
 
 #include "utils.hpp"
 #include <ff/ff.hpp>
@@ -16,14 +10,14 @@
 
 using namespace ff;
 
-/*============================== Shared state ===============================*/
+// Shared state
 static IndexRec*     g_base          = nullptr;
 static std::string   g_unsorted_file;
 static std::size_t   g_N             = 0;
 static int           g_notify_every  = 0;     // we use opt.cutoff
 static ProgressGate  g_gate;                  // from utils.hpp
 
-/*=============================== Task model ================================*/
+// Task model
 struct Task {
     enum Kind { Sort, Merge, BuildIndex } kind;
     std::size_t left, mid, right;
@@ -34,7 +28,7 @@ struct Task {
 struct Emitter;  // fwd
 static void build_tasks(std::size_t, std::size_t, Task*, std::size_t, Emitter*);
 
-/*=============================== Emitter ==================================*/
+// Emitter
 struct Emitter : ff_node_t<Task> {
     Emitter(std::size_t N, std::size_t cutoff) : N(N), cutoff(cutoff) {}
 
@@ -42,7 +36,7 @@ struct Emitter : ff_node_t<Task> {
         if (in == nullptr)             // FastFlow’s wake-up dummy
             return GO_ON;
 
-        // We only ever get Merge tasks back here (parents). BuildIndex returns GO_ON from worker.
+        // We only ever get Merge tasks back here (parents). BuildIndex returns GO_ON from worker
         if (!in->is_ready) {           // first child finished
             in->is_ready = true;
         } else {
@@ -69,35 +63,35 @@ private:
     std::size_t cutoff;
 };
 
-/*========================= Build full binary tree ==========================*/
+// Build full binary tree
 static void build_tasks(std::size_t l, std::size_t r, Task* parent,
                         std::size_t cutoff, Emitter* emitter) {
     const std::size_t span = r - l + 1;
     if (span <= cutoff) {
-        // Leaf → sort directly (gated in worker before sort_records)
+        // Leaf: sort directly (gated in worker before sort_records)
         emitter->ff_send_out(new Task{ Task::Sort, l, 0, r, /*parent=*/parent, /*is_ready=*/false });
         return;
     }
     std::size_t m = (l + r) / 2;
-    // Internal node → create a Merge task; it will be enqueued after both children return
+    // Internal node: create a Merge task; it will be enqueued after both children return
     Task* t = new Task{ Task::Merge, l, m, r, /*parent=*/parent, /*is_ready=*/false };
     build_tasks(l,   m, t, cutoff, emitter);
     build_tasks(m+1, r, t, cutoff, emitter);
 }
 
-/*================================ Worker ===================================*/
+// Worker
 struct Worker : ff_node_t<Task> {
     Task* svc(Task* t) override {
         switch (t->kind) {
             case Task::BuildIndex: {
-                // Progressive index builder; notifies g_gate every g_notify_every elements (and at end).
+                // Progressive index builder; notifies g_gate every g_notify_every elements (and at end)
                 build_index_mmap(g_unsorted_file, g_base, g_N, g_notify_every, &g_gate);
                 delete t;
                 return GO_ON;  // nothing to return to emitter
             }
 
             case Task::Sort: {
-                // Wait until the slice [L..R] has been fully indexed, then sort in place.
+                // Wait until the slice [L..R] has been fully indexed, then sort in place
                 const std::size_t L = t->left, R = t->right;
                 g_gate.wait_until(R + 1);
                 sort_records(g_base + L, R - L + 1);
@@ -119,17 +113,18 @@ struct Worker : ff_node_t<Task> {
     }
 };
 
-/*================================= Main ====================================*/
+
+// Main
 int main(int argc, char** argv)
 {
     Params opt = parse_argv(argc, argv);
 
-    // Phase 1 – streaming generation --------------------------------------
+    // Phase 1 - streaming generation
     BENCH_START(generate_unsorted);
     std::string unsorted_file = generate_unsorted_file_mmap(opt.n_records, opt.payload_max);
     BENCH_STOP(generate_unsorted);
 
-    // Phase 2+3 – overlap index build + sort -------------------------------
+    // Phase 2+3 - overlap index build + sort
     BENCH_START(reading_and_sorting);
 
     const int nthreads = opt.n_threads > 0 ? opt.n_threads : ff_numCores();
@@ -152,7 +147,7 @@ int main(int argc, char** argv)
         g_notify_every  = opt.cutoff;        // wake frequency
         g_gate.reset();
 
-        // Farm: 1 emitter + (nthreads-1) workers (your original sizing)
+        // Farm: 1 emitter + (nthreads-1) workers
         Emitter emitter(opt.n_records, opt.cutoff);
         std::vector<ff_node*> workers;
         for (int i = 0; i < nthreads - 1; ++i) workers.push_back(new Worker());
@@ -173,14 +168,14 @@ int main(int argc, char** argv)
 
     BENCH_STOP(reading_and_sorting);
 
-    // Phase 4 – rewrite sorted file ---------------------------------------
+    // Phase 4 - rewrite sorted file
     BENCH_START(writing);
     rewrite_sorted_mmap(unsorted_file, "files/sorted_"
                         + std::to_string(opt.n_records) + "_"
                         + std::to_string(opt.payload_max) + ".bin", g_base, opt.n_records);
     BENCH_STOP(writing);
 
-    // Phase 5 – verify -----------------------------------------------------
+    // Phase 5 - verify
     BENCH_START(check_if_sorted);
     check_if_sorted_mmap("files/sorted_"
                          + std::to_string(opt.n_records) + "_"

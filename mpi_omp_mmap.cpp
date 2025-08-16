@@ -1,14 +1,15 @@
-// mpi_pairwise_tree_oneshot.cpp — Log2(P) pairwise merge; one-shot index sends
-// Build: mpic++ -O3 -std=c++20 -fopenmp mpi_pairwise_tree_oneshot.cpp -o bin/mpi_pairwise_tree
-// Run (Slurm): srun -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
+// MPI Pairwise-tree mergesort with one-shot index sends
+// Local sort uses OpenMP tasks on IndexRec
+// One send and one recv per rank using deterministic slice sizes
+// Locally with mpirun -np 4 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
+// On Slurm with srun --mpi=pmix -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
 
-#include "utils.hpp" // parse_argv, BENCH_* timers, IndexRec { key, offset, len }, sort_records, merge_records, generate_unsorted_file_mmap, rewrite_sorted_mmap, check_if_sorted_mmap
+
+#include "utils.hpp"
 #include <mpi.h>
 #include <omp.h>
 
-// ============================================================================
-// OpenMP task mergesort for IndexRec — reuses your utils merge/sort primitives
-// ============================================================================
+// OpenMP task mergesort for IndexRec - reuses theone of the omp version
 static inline void mergesort_task(IndexRec* base,
                                   std::size_t left,
                                   std::size_t right,
@@ -29,9 +30,7 @@ static inline void mergesort_task(IndexRec* base,
     }
 }
 
-// ============================================================================
 // MPI datatype for IndexRec so we can send/recv it directly
-// ============================================================================
 static inline MPI_Datatype make_mpi_indexrec_type() {
     MPI_Datatype dtype;
     int          blocklen[3] = {1, 1, 1};
@@ -48,9 +47,7 @@ static inline MPI_Datatype make_mpi_indexrec_type() {
     return dtype;
 }
 
-// ============================================================================
 // Deterministic counts (no size messages / no Bcasts)
-// ----------------------------------------------------------------------------
 static inline int count_for_rank(int rank, uint64_t total_records, int world_size) {
     const uint64_t end   = (total_records * (uint64_t)(rank + 1)) / world_size;
     const uint64_t start = (total_records * (uint64_t) rank)      / world_size;
@@ -72,9 +69,7 @@ static inline int partner_subtree_size(int partner_rank,
     return sum;
 }
 
-// ============================================================================
 // Pairwise log2(P) merge tree on IndexRec (no handshakes, no barriers)
-// ============================================================================
 static void pairwise_merge_tree(std::vector<IndexRec>& local_sorted_index,
                                 int world_rank, int world_size,
                                 uint64_t total_records,
@@ -83,7 +78,20 @@ static void pairwise_merge_tree(std::vector<IndexRec>& local_sorted_index,
     std::vector<IndexRec> partner_buf;
     std::vector<IndexRec> concat;
 
+    // Iterate merge rounds where the stride doubles each time
+    // 1 << round computes 2^round as the current stride
+    // Partner for this rank is rank XOR stride
+    // Stop when stride reaches world_size
+    // If partner exceeds world_size we skip that pair
+    // Example P=8 -> r=0 stride=1: 0-1 2-3 4-5 6-7
+    // Example P=8 -> r=1 stride=2: 0-2 1-3 4-6 5-7
+    // Example P=8 -> r=2 stride=4: 0-4 1-5 2-6 3-7
     for (int round = 0; (1 << round) < world_size; ++round) {
+
+        // Pick partner by flipping the bit for this round
+        // ^ is bitwise XOR and (1 << round) selects the bit to flip
+        // Example rank 5 (101b): r0 stride 1 -> 5^1=4 (100b), r1 stride 2 -> 5^2=7 (111b), r2 stride 4 -> 5^4=1 (001b)
+        // Works like a hypercube edge per round; skip if partner >= world_size
         const int partner = world_rank ^ (1 << round);
         if (partner >= world_size) continue;
 
@@ -124,28 +132,18 @@ static void pairwise_merge_tree(std::vector<IndexRec>& local_sorted_index,
     }
 }
 
-// ============================================================================
 // One-shot index distribution
-// ----------------------------------------------------------------------------
-// Idea: root (rank 0) scans the file once, fills exactly one vector per rank
+// Root (rank 0) scans the file once, fills exactly one vector per rank
 // with that rank’s slice (contiguous by record index). As soon as a slice is
 // complete (we reach its end record), root posts a single MPI_Isend of that
 // vector to that rank. Non-root ranks pre-post a single MPI_Irecv for their
 // expected slice size (computed deterministically), then wait for completion.
 // This gives exactly one send/recv pair per rank, and still overlaps a bit
 // because root sends each slice as soon as it finishes scanning it.
-// ============================================================================
 
 constexpr int TAG_FULL_SLICE = 650; // full IndexRec slice payload
 
-/**
- * Root: build and send one full slice per rank (one Isend per rank).
- *
- * We **do not** allocate one giant IndexRec array; instead we keep
- * `per_rank[r]` vectors. Because records are assigned by index range,
- * each rank’s slice is contiguous in the scan, so we can send as soon
- * as we finish filling that vector.
- */
+// Root: build and send one full slice per rank (one Isend per rank)
 static void root_build_and_send_full_slices(const std::string& input_path,
                                             uint64_t           total_records,
                                             int                world_size,
@@ -153,7 +151,7 @@ static void root_build_and_send_full_slices(const std::string& input_path,
                                             std::vector<IndexRec>& out_local_slice)
 {
     BENCH_START(reading);
-    // 1) Open and mmap input (same pattern as your build_index_mmap).
+    // 1) Open and mmap input (same pattern as build_index_mmap)
     int fd = ::open(input_path.c_str(), O_RDONLY);
     if (fd < 0) { std::perror("[oneshot] open"); MPI_Abort(MPI_COMM_WORLD, 101); }
     struct stat st{};
@@ -163,7 +161,7 @@ static void root_build_and_send_full_slices(const std::string& input_path,
     if (map == MAP_FAILED) { std::perror("[oneshot] mmap"); close(fd); MPI_Abort(MPI_COMM_WORLD, 103); }
     const char* data = static_cast<const char*>(map);
 
-    // 2) Precompute per-rank ranges and reserve vectors at exact capacity.
+    // 2) Precompute per-rank ranges and reserve vectors at exact capacity
     std::vector<int> slice_size(world_size);
     std::vector<uint64_t> start_idx(world_size), end_idx(world_size);
     for (int r = 0; r < world_size; ++r) {
@@ -172,6 +170,10 @@ static void root_build_and_send_full_slices(const std::string& input_path,
         slice_size[r] = static_cast<int>(end_idx[r] - start_idx[r]);
     }
 
+    // We **do not** allocate one giant IndexRec array; instead we keep
+    // `per_rank[r]` vectors. Because records are assigned by index range,
+    // each rank’s slice is contiguous in the scan, so we can send as soon
+    // as we finish filling that vector.
     std::vector< std::vector<IndexRec> > per_rank(world_size);
     for (int r = 0; r < world_size; ++r) per_rank[r].reserve(slice_size[r]);
 
@@ -231,16 +233,14 @@ static void root_build_and_send_full_slices(const std::string& input_path,
     BENCH_STOP(reading);
 }
 
-/**
- * Non-root: pre-post one Irecv for the full slice and wait for it.
- * Size is deterministic: floor(N*(r+1)/P) - floor(N*r/P).
- */
+// Non-root: pre-post one Irecv for the full slice and wait for it
 static void nonroot_recv_full_slice(int                my_rank,
                                     uint64_t           total_records,
                                     int                world_size,
                                     MPI_Datatype       MPI_IndexRec,
                                     std::vector<IndexRec>& out_local_slice)
 {
+    // Size is deterministic: floor(N*(r+1)/P) - floor(N*r/P)
     const int expected = count_for_rank(my_rank, total_records, world_size);
     out_local_slice.resize(expected);
 
@@ -250,9 +250,7 @@ static void nonroot_recv_full_slice(int                my_rank,
     // BENCH_STOP(distribute_index);
 }
 
-// ============================================================================
 // Main
-// ============================================================================
 int main(int argc, char** argv)
 {
 
@@ -268,29 +266,29 @@ int main(int argc, char** argv)
 
     const uint64_t total_records = params.n_records;
 
-    // ----------------- Phase 1: ensure input exists (rank 0) -----------------
-    std::string input_path;
+    // Phase 1: ensure input exists (rank 0)
+    std::string unsorted_file;
     if (world_rank == 0) {
         BENCH_START(generate_unsorted);
-        input_path = generate_unsorted_file_mmap(params.n_records, params.payload_max);
+        unsorted_file = generate_unsorted_file_mmap(params.n_records, params.payload_max);
         BENCH_STOP(generate_unsorted);
     }
 
-    // ----------------- Phase 2: one-shot index distribution ------------------
+    // Phase 2: one-shot index distribution
     std::vector<IndexRec> local_index;
 
     BENCH_START(reading_and_sorting);
 
     if (world_rank == 0) {
         root_build_and_send_full_slices(
-            input_path, total_records, world_size, MPI_IndexRec, local_index);
+            unsorted_file, total_records, world_size, MPI_IndexRec, local_index);
         // local_index now holds rank 0’s full slice (unsorted yet)
     } else {
         nonroot_recv_full_slice(
             world_rank, total_records, world_size, MPI_IndexRec, local_index);
     }
 
-    // ----------------- Phase 3: local sort (OpenMP mergesort) ----------------
+    // Phase 3: local sort (OpenMP mergesort)
     // BENCH_START(local_sort);
     #pragma omp parallel
     {
@@ -302,12 +300,12 @@ int main(int argc, char** argv)
     }
     // BENCH_STOP(local_sort);
 
-    // ----------------- Phase 4: pairwise merge tree (IndexRec only) ----------
+    // Phase 4: pairwise merge tree (IndexRec only)
     // BENCH_START(distributed_merge);
     pairwise_merge_tree(local_index, world_rank, world_size, total_records, MPI_IndexRec);
     // BENCH_STOP(distributed_merge);
 
-    // ----------------- Phase 5: final rewrite (rank 0) -----------------------
+    // Phase 5: final rewrite (rank 0)
     if (world_rank == 0) {
         BENCH_STOP(reading_and_sorting);
 
@@ -322,7 +320,7 @@ int main(int argc, char** argv)
         std::memcpy(final_index, local_index.data(),
                     local_index.size() * sizeof(IndexRec));
 
-        if (!rewrite_sorted_mmap(input_path, output_path, final_index, local_index.size())) {
+        if (!rewrite_sorted_mmap(unsorted_file, output_path, final_index, local_index.size())) {
             std::fprintf(stderr, "[rank 0] rewrite_sorted_mmap failed\n");
             MPI_Abort(MPI_COMM_WORLD, 202);
         }

@@ -24,9 +24,7 @@
 #include <getopt.h>             // getopt_long, struct option
 
 
-/*---------------------------------------------------------------------------*/
-/* 1.  Run-time parameters                                                   */
-/*---------------------------------------------------------------------------*/
+// Run-time parameters
 struct Params {
     std::size_t   n_records   = 1'000'000;  // -n
     std::uint32_t payload_max = 256;        // -p
@@ -34,9 +32,8 @@ struct Params {
     std::size_t   cutoff      = 10'000;     // -c   task-size threshold
 };
 
-/*---------------------------------------------------------------------------*/
-/* 2.  Timing utilities (chrono version, C++-20)                             */
-/*---------------------------------------------------------------------------*/
+
+// Timing utilities (chrono version, C++-20)
 #define BENCH_START(tag) \
     auto __bench_start_##tag = std::chrono::steady_clock::now()
 
@@ -49,27 +46,26 @@ struct Params {
         std::printf("[%-20s] %10.3f ms\n", #tag, __bench_ms_##tag);            \
     } while (0)
 
-/*---------------------------------------------------------------------------*/
-/* 3.  Record definition                                                     */
-/*---------------------------------------------------------------------------*/
+
+// Record definition
 struct Record {
     unsigned long key;      // sorting key
     std::uint32_t len;      // payload length in bytes
     char*         payload;  // malloc-owned
 };
 
-//------------------------------------------------------------------------------
-//  Phase 2 – build index (key + offset)                                        
-//------------------------------------------------------------------------------
+
+// Build index (key + offset)
 struct IndexRec {
-    unsigned long key;  // same as in Record
+    unsigned long key;      // same as in Record
     uint64_t      offset; 
-    uint32_t      len;     // payload length
+    uint32_t      len;      // payload length
 };
 
-// Simple progress gate: wait until at least `need` records are ready,
-// and allow the producer to notify progress.
+
+// Simple progress gate: wait until at least `need` records are ready, and allow the producer to notify progress
 struct ProgressGate {
+
     std::mutex m;
     std::condition_variable cv;
     std::size_t filled = 0;
@@ -78,6 +74,7 @@ struct ProgressGate {
         std::lock_guard<std::mutex> lk(m);
         filled = 0;
     }
+
     void notify(std::size_t filled_now) {
         // fprintf(stdout, "Notifying progress: %zu records ready\n", filled_now);
         {
@@ -86,6 +83,7 @@ struct ProgressGate {
         }
         cv.notify_all();
     }
+
     void wait_until(std::size_t need) {
         std::unique_lock<std::mutex> lk(m);
         // fprintf(stdout, "Waiting for %zu records...\n", need);
@@ -93,9 +91,8 @@ struct ProgressGate {
     }
 };
 
-/*---------------------------------------------------------------------------*/
-/* 4.  Command-line parsing                                                  */
-/*---------------------------------------------------------------------------*/
+
+// Command-line parsing
 static inline Params parse_argv(int argc, char** argv)
 {
     Params opt{};
@@ -182,14 +179,13 @@ static inline Params parse_argv(int argc, char** argv)
 }
 
 
-/*---------------------------------------------------------------------------*/
-/* 6.  Sorting & validation helpers                                          */
-/*---------------------------------------------------------------------------*/
+// Sorting & validation helpers
 static inline void sort_records(IndexRec* base, std::size_t n)
 {
     std::sort(base, base + n,
             [](const IndexRec& a, const IndexRec& b) { return a.key < b.key; });
 }
+
 
 static inline void dump_records(const Record* base, std::size_t n, std::size_t max_lines = 10)
 {
@@ -198,9 +194,8 @@ static inline void dump_records(const Record* base, std::size_t n, std::size_t m
     if (n > max_lines) std::puts("…");
 }
 
-/*---------------------------------------------------------------------------*/
-/* 7.  Merge two sorted runs into their location                             */
-/*---------------------------------------------------------------------------*/
+
+// Merge two sorted runs into their location
 static inline void merge_records(IndexRec* base, std::size_t left, std::size_t mid, std::size_t right)
 {
     std::inplace_merge(base + left,           // first half begin
@@ -209,11 +204,8 @@ static inline void merge_records(IndexRec* base, std::size_t left, std::size_t m
                        [](const IndexRec& a, const IndexRec& b) { return a.key < b.key; });
 }
 
-/*---------------------------------------------------------------------------*/
 
-//------------------------------------------------------------------------------
-// Phase 1 – mmap generator with exact-size preallocation and single-recopy
-//------------------------------------------------------------------------------
+// mmap generator with exact-size preallocation and single-recopy
 static std::string generate_unsorted_file_mmap(std::size_t total_n,
                                                std::uint32_t payload_max)
 {
@@ -309,16 +301,11 @@ static std::string generate_unsorted_file_mmap(std::size_t total_n,
     return path;
 }
 
-/**
- * build_index_mmap
- *  - in_path:   path to the unsorted file
- *  - total_n:   expected number of records
- * Returns a malloc’d IndexRec[total_n], or nullptr on error.
- */
-// 1) PREALLOC + optional progress (your current function; keep as-is)
-inline void build_index_mmap(const std::string& path,
+
+// Returns a malloc’d IndexRec[total_n], or nullptr on error.
+inline void build_index_mmap(const std::string& path,   // path to the unsorted file
                              IndexRec* idx,
-                             std::size_t n,
+                             std::size_t n,             // expected number of records
                              int notify_every = 0,
                              ProgressGate* gate = nullptr)
 {
@@ -368,7 +355,7 @@ inline void build_index_mmap(const std::string& path,
 }
 
 
-// 2) ALLOCATING OVERLOAD (backward compatible with old seq code)
+// ALLOCATING OVERLOAD (backward compatible with old seq code)
 inline IndexRec* build_index_mmap(const std::string& path, std::size_t n)
 {
   // allocate with malloc because rewrite_sorted_mmap() calls free(idx)
@@ -381,23 +368,12 @@ inline IndexRec* build_index_mmap(const std::string& path, std::size_t n)
 }
 
 
-//------------------------------------------------------------------------------
-//  Phase 4 – rewrite sorted file                                               
-//------------------------------------------------------------------------------
-/**
- * rewrite_sorted_mmap
- *  - in_path:  path to the unsorted input file
- *  - out_path: path for the sorted output file
- *  - idx:      array of IndexRec entries (key, offset, len), already sorted by key
- *  - n_idx:    number of entries in idx[]
- *
- * Returns true on success, false on any error.
- */
+//  Rewrite sorted file: Returns true on success, false on any error.
 static bool
-rewrite_sorted_mmap(const std::string& in_path,
-                    const std::string& out_path,
-                    IndexRec*          idx,
-                    std::size_t        n_idx)
+rewrite_sorted_mmap(const std::string& in_path,     // path to the unsorted input file
+                    const std::string& out_path,    // path for the sorted output file
+                    IndexRec*          idx,         // array of IndexRec entries (key, offset, len), already sorted by key
+                    std::size_t        n_idx)       // number of entries in idx[]
 {
     // 1) open & stat input
     int fd_in = ::open(in_path.c_str(), O_RDONLY);
@@ -456,11 +432,9 @@ rewrite_sorted_mmap(const std::string& in_path,
 }
 
 
-//------------------------------------------------------------------------------
-//  Verification                                                                
-//------------------------------------------------------------------------------
+// Verification                                                                
 static bool check_if_sorted_mmap(const std::string& path,
-                     std::size_t        total_n)
+                                 std::size_t        total_n)
 {
     int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) { perror("open"); return false; }
@@ -508,5 +482,6 @@ static bool check_if_sorted_mmap(const std::string& path,
 
     return true;
 }
+
 
 #endif /* UTILS_HPP */

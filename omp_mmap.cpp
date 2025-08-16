@@ -1,13 +1,10 @@
-/*  OpenMP Merge-Sort with overlapped index-building (simple locking)
- *  - Overlaps progressive index build with task-parallel mergesort.
- *  - Requires your utils.hpp as-is (no changes).
- *  - Compile: g++ -O3 -std=c++17 -fopenmp -o bin/omp_mmap omp_mmap.cpp
- */
+// OpenMP Merge-Sort with overlapped index-building (simple locking)
+// Overlaps progressive index build with task-parallel mergesort
 
 #include "utils.hpp"
 #include <omp.h>
 
-/* --------------------- mergesort tasks with gating ----------------------- */
+// Mergesort tasks with gating
 static inline void mergesort_task(IndexRec* base,
                                   std::size_t left,
                                   std::size_t right,
@@ -27,22 +24,23 @@ static inline void mergesort_task(IndexRec* base,
 
     #pragma omp taskwait
 
-    // No extra wait here: both children already waited before sorting.
+    // No extra wait here: both children already waited before sorting
     merge_records(base, left, mid, right);
   } else {
-    // Leaf work: wait until our whole slice is available, then sort it.
+    // Leaf work: wait until our whole slice is available, then sort it
     gate->wait_until(right + 1);
     sort_records(base + left, right - left + 1);
   }
 }
 
-/* --------------------------------- main ---------------------------------- */
+
+// Main
 int main(int argc, char** argv)
 {
   Params opt = parse_argv(argc, argv);
   if (opt.n_threads > 0) omp_set_num_threads(opt.n_threads);
 
-  // 1) Generate unsorted file (unchanged)
+  // 1) Generate unsorted file
   BENCH_START(generate_unsorted);
   std::string unsorted_file = generate_unsorted_file_mmap(opt.n_records, opt.payload_max);
   BENCH_STOP(generate_unsorted);
@@ -77,7 +75,7 @@ int main(int argc, char** argv)
 
   BENCH_STOP(reading_and_sorting);
 
-  // 4) Rewrite sorted file (unchanged; rewrite_sorted_mmap frees idx)
+  // 4) Rewrite sorted file (rewrite_sorted_mmap frees idx)
   BENCH_START(writing);
   const std::string sorted_file =
       "files/sorted_" + std::to_string(opt.n_records) + "_"
@@ -85,7 +83,7 @@ int main(int argc, char** argv)
   rewrite_sorted_mmap(unsorted_file, sorted_file, idx, opt.n_records);
   BENCH_STOP(writing);
 
-  // 5) Verify (unchanged; will also unlink the sorted file in your helpers)
+  // 5) Verify
   BENCH_START(check_if_sorted);
   check_if_sorted_mmap(sorted_file, opt.n_records);
   BENCH_STOP(check_if_sorted);
