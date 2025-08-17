@@ -309,62 +309,62 @@ inline void build_index_mmap(const std::string& path,   // path to the unsorted 
                              int notify_every = 0,
                              ProgressGate* gate = nullptr)
 {
-  BENCH_START(reading);
-  int fd = ::open(path.c_str(), O_RDONLY);
-  if (fd < 0) { std::perror("open"); std::exit(1); }
-  struct stat st{};
-  if (fstat(fd, &st) < 0) { std::perror("fstat"); std::exit(1); }
-  const std::size_t file_sz = static_cast<std::size_t>(st.st_size);
+    BENCH_START(reading);
+    int fd = ::open(path.c_str(), O_RDONLY);
+    if (fd < 0) { std::perror("open"); std::exit(1); }
+    struct stat st{};
+    if (fstat(fd, &st) < 0) { std::perror("fstat"); std::exit(1); }
+    const std::size_t file_sz = static_cast<std::size_t>(st.st_size);
 
-  void* map = ::mmap(nullptr, file_sz, PROT_READ, MAP_SHARED, fd, 0);
-  if (map == MAP_FAILED) { std::perror("mmap"); std::exit(1); }
+    void* map = ::mmap(nullptr, file_sz, PROT_READ, MAP_SHARED, fd, 0);
+    if (map == MAP_FAILED) { std::perror("mmap"); std::exit(1); }
 
-  const unsigned char* base = static_cast<const unsigned char*>(map);
+    const unsigned char* base = static_cast<const unsigned char*>(map);
 
-  std::size_t pos = 0;
-  for (std::size_t i = 0; i < n; ++i) {
-    const std::size_t rec_offset = pos;
+    std::size_t pos = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const std::size_t rec_offset = pos;
 
-    unsigned long key;
-    std::memcpy(&key, base + pos, sizeof(unsigned long));
-    pos += sizeof(unsigned long);
+        unsigned long key;
+        std::memcpy(&key, base + pos, sizeof(unsigned long));
+        pos += sizeof(unsigned long);
 
-    uint32_t len;
-    std::memcpy(&len, base + pos, sizeof(uint32_t));
-    pos += sizeof(uint32_t);
+        uint32_t len;
+        std::memcpy(&len, base + pos, sizeof(uint32_t));
+        pos += sizeof(uint32_t);
 
-    idx[i].key    = key;
-    idx[i].offset = rec_offset;
-    idx[i].len    = len;
+        idx[i].key    = key;
+        idx[i].offset = rec_offset;
+        idx[i].len    = len;
 
-    pos += len;
+        pos += len;
 
-    if (gate && notify_every > 0) {
-      const std::size_t filled_now = i + 1;
-      if (filled_now % static_cast<std::size_t>(notify_every) == 0) {
-        gate->notify(filled_now);
-      }
+        if (gate && notify_every > 0) {
+        const std::size_t filled_now = i + 1;
+        if (filled_now % static_cast<std::size_t>(notify_every) == 0) {
+            gate->notify(filled_now);
+        }
+        }
     }
-  }
 
-  if (gate) gate->notify(n);
+    if (gate) gate->notify(n);
 
-  ::munmap(const_cast<unsigned char*>(base), file_sz);
-  ::close(fd);
-  BENCH_STOP(reading);
+    ::munmap(const_cast<unsigned char*>(base), file_sz);
+    ::close(fd);
+    BENCH_STOP(reading);
 }
 
 
 // ALLOCATING OVERLOAD (backward compatible with old seq code)
 inline IndexRec* build_index_mmap(const std::string& path, std::size_t n)
 {
-  // allocate with malloc because rewrite_sorted_mmap() calls free(idx)
-  auto* idx = static_cast<IndexRec*>(std::malloc(n * sizeof(IndexRec)));
-  if (!idx) { std::perror("malloc"); std::exit(1); }
+    // allocate with malloc because rewrite_sorted_mmap() calls free(idx)
+    auto* idx = static_cast<IndexRec*>(std::malloc(n * sizeof(IndexRec)));
+    if (!idx) { std::perror("malloc"); std::exit(1); }
 
-  // delegate to the prealloc version with default behavior (no notifications)
-  build_index_mmap(path, idx, n, /*notify_every=*/0, /*gate=*/nullptr);
-  return idx;
+    // delegate to the prealloc version with default behavior (no notifications)
+    build_index_mmap(path, idx, n, /*notify_every=*/0, /*gate=*/nullptr);
+    return idx;
 }
 
 

@@ -64,6 +64,13 @@ int main(int argc, char** argv)
         #pragma omp task shared(idx, gate)
         build_index_mmap(unsorted_file, idx, opt.n_records, opt.cutoff, &gate);
 
+        // In case no overlap between reading and sorting is achievable
+        if (omp_get_max_threads() <= 1) {
+
+          // Wait for the index to be built before proceeding
+          #pragma omp taskwait
+        }
+
         // B) Mergesort on the index with readiness gating
         #pragma omp task shared(idx, gate)
         mergesort_task(idx, 0, opt.n_records - 1, opt.cutoff, &gate);
