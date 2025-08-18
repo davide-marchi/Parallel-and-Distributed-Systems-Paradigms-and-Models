@@ -36,8 +36,8 @@ NODES=(1 2 4) # 8              # we submit one array per value here
 # If >0, tasks with T > CORES_PER_NODE are skipped to avoid oversubscription.
 CORES_PER_NODE=0
 
-# Optional MPI plugin for srun. Common values: pmix, pmi2. Leave empty to let Slurm/mpi pick.
-MPI_PLUGIN=""
+# MPI plugin for srun. Common value: pmix, pmi2. Leave empty to let Slurm/mpi pick.
+MPI_PLUGIN="pmix"
 # -----------------------------------------------------------------
 
 SCRIPT_PATH="$(readlink -f "$0")"
