@@ -1,3 +1,7 @@
+- Ha senso calcolare speedup su tutto il tempo totale e dovrei ignorare la scrittura del file? Non sembrerebbe, rewrite time troppo variabile
+
+----
+
 - Add march=native during compilation ?
 
 - Fix the passing of the -c flag!
