@@ -1,0 +1,648 @@
+[task 0] bin=sequential_seq_mmap  trial=1  N=100000  P=8  C=10000  T=1
+Skipping gen; found “files/unsorted_100000_8.bin”.
+[generate_unsorted   ]      0.918 ms
+[reading             ]      3.904 ms
+[reading_and_sorting ]     12.117 ms
+[writing             ]     14.367 ms
+File is sorted.
+[check_if_sorted     ]      1.806 ms
+[task 0] done  → results/sequential_seq_mmap.csv
+[task 1] bin=sequential_seq_mmap  trial=1  N=100000  P=8  C=10000  T=2
+Skipping gen; found “files/unsorted_100000_8.bin”.
+[generate_unsorted   ]      0.724 ms
+[reading             ]      4.021 ms
+[reading_and_sorting ]     12.300 ms
+[writing             ]     13.406 ms
+File is sorted.
+[check_if_sorted     ]      1.652 ms
+[task 1] done  → results/sequential_seq_mmap.csv
+[task 2] bin=sequential_seq_mmap  trial=1  N=100000  P=8  C=10000  T=4
+Skipping gen; found “files/unsorted_100000_8.bin”.
+[generate_unsorted   ]      0.819 ms
+[reading             ]      3.925 ms
+[reading_and_sorting ]     12.041 ms
+[writing             ]     14.117 ms
+File is sorted.
+[check_if_sorted     ]      1.725 ms
+[task 2] done  → results/sequential_seq_mmap.csv
+[task 3] bin=sequential_seq_mmap  trial=1  N=100000  P=8  C=10000  T=8
+Skipping gen; found “files/unsorted_100000_8.bin”.
+[generate_unsorted   ]      0.815 ms
+[reading             ]      4.027 ms
+[reading_and_sorting ]     12.221 ms
+[writing             ]     13.791 ms
+File is sorted.
+[check_if_sorted     ]      1.755 ms
+[task 3] done  → results/sequential_seq_mmap.csv
+[task 4] bin=sequential_seq_mmap  trial=1  N=100000  P=8  C=10000  T=16
+Skipping gen; found “files/unsorted_100000_8.bin”.
+[generate_unsorted   ]      0.776 ms
+[reading             ]      3.693 ms
+[reading_and_sorting ]     11.970 ms
+[writing             ]     13.220 ms
+File is sorted.
+[check_if_sorted     ]      1.801 ms
+[task 4] done  → results/sequential_seq_mmap.csv
+[task 5] bin=sequential_seq_mmap  trial=1  N=100000  P=8  C=10000  T=32
+Skipping gen; found “files/unsorted_100000_8.bin”.
+[generate_unsorted   ]      0.764 ms
+[reading             ]      4.063 ms
+[reading_and_sorting ]     12.367 ms
+[writing             ]     13.692 ms
+File is sorted.
+[check_if_sorted     ]      1.762 ms
+[task 5] done  → results/sequential_seq_mmap.csv
+[task 6] bin=sequential_seq_mmap  trial=1  N=100000  P=32  C=10000  T=1
+Skipping gen; found “files/unsorted_100000_32.bin”.
+[generate_unsorted   ]      0.889 ms
+[reading             ]      5.999 ms
+[reading_and_sorting ]     14.221 ms
+[writing             ]     36.272 ms
+File is sorted.
+[check_if_sorted     ]      2.550 ms
+[task 6] done  → results/sequential_seq_mmap.csv
+[task 7] bin=sequential_seq_mmap  trial=1  N=100000  P=32  C=10000  T=2
+Skipping gen; found “files/unsorted_100000_32.bin”.
+[generate_unsorted   ]      0.856 ms
+[reading             ]      6.194 ms
+[reading_and_sorting ]     14.349 ms
+[writing             ]     20.155 ms
+File is sorted.
+[check_if_sorted     ]      2.130 ms
+[task 7] done  → results/sequential_seq_mmap.csv
+[task 8] bin=sequential_seq_mmap  trial=1  N=100000  P=32  C=10000  T=4
+Skipping gen; found “files/unsorted_100000_32.bin”.
+[generate_unsorted   ]      0.832 ms
+[reading             ]      6.177 ms
+[reading_and_sorting ]     14.554 ms
+[writing             ]     19.914 ms
+File is sorted.
+[check_if_sorted     ]      2.330 ms
+[task 8] done  → results/sequential_seq_mmap.csv
+[task 9] bin=sequential_seq_mmap  trial=1  N=100000  P=32  C=10000  T=8
+Skipping gen; found “files/unsorted_100000_32.bin”.
+[generate_unsorted   ]      0.777 ms
+[reading             ]      5.571 ms
+[reading_and_sorting ]     13.824 ms
+[writing             ]     19.575 ms
+File is sorted.
+[check_if_sorted     ]      2.307 ms
+[task 9] done  → results/sequential_seq_mmap.csv
+[task 10] bin=sequential_seq_mmap  trial=1  N=100000  P=32  C=10000  T=16
+Skipping gen; found “files/unsorted_100000_32.bin”.
+[generate_unsorted   ]      0.745 ms
+[reading             ]      5.979 ms
+[reading_and_sorting ]     14.320 ms
+[writing             ]     19.491 ms
+File is sorted.
+[check_if_sorted     ]      2.513 ms
+[task 10] done  → results/sequential_seq_mmap.csv
+[task 11] bin=sequential_seq_mmap  trial=1  N=100000  P=32  C=10000  T=32
+Skipping gen; found “files/unsorted_100000_32.bin”.
+[generate_unsorted   ]      0.720 ms
+[reading             ]      5.593 ms
+[reading_and_sorting ]     13.793 ms
+[writing             ]     19.759 ms
+File is sorted.
+[check_if_sorted     ]      2.660 ms
+[task 11] done  → results/sequential_seq_mmap.csv
+[task 12] bin=sequential_seq_mmap  trial=1  N=100000  P=128  C=10000  T=1
+Skipping gen; found “files/unsorted_100000_128.bin”.
+[generate_unsorted   ]      0.821 ms
+[reading             ]     11.784 ms
+[reading_and_sorting ]     20.061 ms
+[writing             ]     68.417 ms
+File is sorted.
+[check_if_sorted     ]      3.679 ms
+[task 12] done  → results/sequential_seq_mmap.csv
+[task 13] bin=sequential_seq_mmap  trial=1  N=100000  P=128  C=10000  T=2
+Skipping gen; found “files/unsorted_100000_128.bin”.
+[generate_unsorted   ]      0.802 ms
+[reading             ]     11.997 ms
+[reading_and_sorting ]     20.224 ms
+[writing             ]     47.186 ms
+File is sorted.
+[check_if_sorted     ]      3.988 ms
+[task 13] done  → results/sequential_seq_mmap.csv
+[task 14] bin=sequential_seq_mmap  trial=1  N=100000  P=128  C=10000  T=4
+Skipping gen; found “files/unsorted_100000_128.bin”.
+[generate_unsorted   ]      0.834 ms
+[reading             ]     12.105 ms
+[reading_and_sorting ]     20.380 ms
+[writing             ]     47.791 ms
+File is sorted.
+[check_if_sorted     ]      4.104 ms
+[task 14] done  → results/sequential_seq_mmap.csv
+[task 15] bin=sequential_seq_mmap  trial=1  N=100000  P=128  C=10000  T=8
+Skipping gen; found “files/unsorted_100000_128.bin”.
+[generate_unsorted   ]      0.824 ms
+[reading             ]     12.106 ms
+[reading_and_sorting ]     20.343 ms
+[writing             ]     51.633 ms
+File is sorted.
+[check_if_sorted     ]      4.048 ms
+[task 15] done  → results/sequential_seq_mmap.csv
+[task 16] bin=sequential_seq_mmap  trial=1  N=100000  P=128  C=10000  T=16
+Skipping gen; found “files/unsorted_100000_128.bin”.
+[generate_unsorted   ]      0.854 ms
+[reading             ]     12.785 ms
+[reading_and_sorting ]     20.985 ms
+[writing             ]     48.851 ms
+File is sorted.
+[check_if_sorted     ]      4.039 ms
+[task 16] done  → results/sequential_seq_mmap.csv
+[task 17] bin=sequential_seq_mmap  trial=1  N=100000  P=128  C=10000  T=32
+Skipping gen; found “files/unsorted_100000_128.bin”.
+[generate_unsorted   ]      0.716 ms
+[reading             ]     11.839 ms
+[reading_and_sorting ]     20.036 ms
+[writing             ]     54.764 ms
+File is sorted.
+[check_if_sorted     ]      4.047 ms
+[task 17] done  → results/sequential_seq_mmap.csv
+[task 18] bin=sequential_seq_mmap  trial=1  N=1000000  P=8  C=10000  T=1
+Skipping gen; found “files/unsorted_1000000_8.bin”.
+[generate_unsorted   ]      0.828 ms
+[reading             ]     33.307 ms
+[reading_and_sorting ]    128.119 ms
+[writing             ]    155.635 ms
+File is sorted.
+[check_if_sorted     ]      9.880 ms
+[task 18] done  → results/sequential_seq_mmap.csv
+[task 19] bin=sequential_seq_mmap  trial=1  N=1000000  P=8  C=10000  T=2
+Skipping gen; found “files/unsorted_1000000_8.bin”.
+[generate_unsorted   ]      0.853 ms
+[reading             ]     33.908 ms
+[reading_and_sorting ]    129.034 ms
+[writing             ]    152.981 ms
+File is sorted.
+[check_if_sorted     ]      9.850 ms
+[task 19] done  → results/sequential_seq_mmap.csv
+[task 20] bin=sequential_seq_mmap  trial=1  N=1000000  P=8  C=10000  T=4
+Skipping gen; found “files/unsorted_1000000_8.bin”.
+[generate_unsorted   ]      0.831 ms
+[reading             ]     33.973 ms
+[reading_and_sorting ]    128.181 ms
+[writing             ]    155.089 ms
+File is sorted.
+[check_if_sorted     ]     10.093 ms
+[task 20] done  → results/sequential_seq_mmap.csv
+[task 21] bin=sequential_seq_mmap  trial=1  N=1000000  P=8  C=10000  T=8
+Skipping gen; found “files/unsorted_1000000_8.bin”.
+[generate_unsorted   ]      0.827 ms
+[reading             ]     32.889 ms
+[reading_and_sorting ]    127.471 ms
+[writing             ]    168.025 ms
+File is sorted.
+[check_if_sorted     ]     15.915 ms
+[task 21] done  → results/sequential_seq_mmap.csv
+[task 22] bin=sequential_seq_mmap  trial=1  N=1000000  P=8  C=10000  T=16
+Skipping gen; found “files/unsorted_1000000_8.bin”.
+[generate_unsorted   ]      0.773 ms
+[reading             ]     33.816 ms
+[reading_and_sorting ]    128.665 ms
+[writing             ]    167.250 ms
+File is sorted.
+[check_if_sorted     ]     16.589 ms
+[task 22] done  → results/sequential_seq_mmap.csv
+[task 23] bin=sequential_seq_mmap  trial=1  N=1000000  P=8  C=10000  T=32
+Skipping gen; found “files/unsorted_1000000_8.bin”.
+[generate_unsorted   ]      0.873 ms
+[reading             ]     33.430 ms
+[reading_and_sorting ]    127.761 ms
+[writing             ]    187.594 ms
+File is sorted.
+[check_if_sorted     ]     16.581 ms
+[task 23] done  → results/sequential_seq_mmap.csv
+[task 24] bin=sequential_seq_mmap  trial=1  N=1000000  P=32  C=10000  T=1
+Skipping gen; found “files/unsorted_1000000_32.bin”.
+[generate_unsorted   ]      0.861 ms
+[reading             ]     49.444 ms
+[reading_and_sorting ]    144.029 ms
+[writing             ]    241.748 ms
+File is sorted.
+[check_if_sorted     ]     56.549 ms
+[task 24] done  → results/sequential_seq_mmap.csv
+[task 25] bin=sequential_seq_mmap  trial=1  N=1000000  P=32  C=10000  T=2
+Skipping gen; found “files/unsorted_1000000_32.bin”.
+[generate_unsorted   ]      0.764 ms
+[reading             ]     49.965 ms
+[reading_and_sorting ]    144.675 ms
+[writing             ]    296.586 ms
+File is sorted.
+[check_if_sorted     ]     26.545 ms
+[task 25] done  → results/sequential_seq_mmap.csv
+[task 26] bin=sequential_seq_mmap  trial=1  N=1000000  P=32  C=10000  T=4
+Skipping gen; found “files/unsorted_1000000_32.bin”.
+[generate_unsorted   ]      0.797 ms
+[reading             ]     50.027 ms
+[reading_and_sorting ]    144.460 ms
+[writing             ]    342.236 ms
+File is sorted.
+[check_if_sorted     ]     15.739 ms
+[task 26] done  → results/sequential_seq_mmap.csv
+[task 27] bin=sequential_seq_mmap  trial=1  N=1000000  P=32  C=10000  T=8
+Skipping gen; found “files/unsorted_1000000_32.bin”.
+[generate_unsorted   ]      0.720 ms
+[reading             ]     50.755 ms
+[reading_and_sorting ]    145.386 ms
+[writing             ]    290.203 ms
+File is sorted.
+[check_if_sorted     ]     15.516 ms
+[task 27] done  → results/sequential_seq_mmap.csv
+[task 28] bin=sequential_seq_mmap  trial=1  N=1000000  P=32  C=10000  T=16
+Skipping gen; found “files/unsorted_1000000_32.bin”.
+[generate_unsorted   ]      0.811 ms
+[reading             ]     50.167 ms
+[reading_and_sorting ]    144.607 ms
+[writing             ]    278.907 ms
+File is sorted.
+[check_if_sorted     ]     15.497 ms
+[task 28] done  → results/sequential_seq_mmap.csv
+[task 29] bin=sequential_seq_mmap  trial=1  N=1000000  P=32  C=10000  T=32
+Skipping gen; found “files/unsorted_1000000_32.bin”.
+[generate_unsorted   ]      0.767 ms
+[reading             ]     49.661 ms
+[reading_and_sorting ]    144.065 ms
+[writing             ]    302.660 ms
+File is sorted.
+[check_if_sorted     ]     16.299 ms
+[task 29] done  → results/sequential_seq_mmap.csv
+[task 30] bin=sequential_seq_mmap  trial=1  N=1000000  P=128  C=10000  T=1
+Skipping gen; found “files/unsorted_1000000_128.bin”.
+[generate_unsorted   ]      0.833 ms
+[reading             ]    114.698 ms
+[reading_and_sorting ]    209.347 ms
+[writing             ]    640.684 ms
+File is sorted.
+[check_if_sorted     ]     31.966 ms
+[task 30] done  → results/sequential_seq_mmap.csv
+[task 31] bin=sequential_seq_mmap  trial=1  N=1000000  P=128  C=10000  T=2
+Skipping gen; found “files/unsorted_1000000_128.bin”.
+[generate_unsorted   ]      0.773 ms
+[reading             ]    115.262 ms
+[reading_and_sorting ]    210.418 ms
+[writing             ]    651.977 ms
+File is sorted.
+[check_if_sorted     ]     33.621 ms
+[task 31] done  → results/sequential_seq_mmap.csv
+[task 32] bin=sequential_seq_mmap  trial=1  N=1000000  P=128  C=10000  T=4
+Skipping gen; found “files/unsorted_1000000_128.bin”.
+[generate_unsorted   ]      0.787 ms
+[reading             ]    115.226 ms
+[reading_and_sorting ]    209.408 ms
+[writing             ]    636.014 ms
+File is sorted.
+[check_if_sorted     ]     32.291 ms
+[task 32] done  → results/sequential_seq_mmap.csv
+[task 33] bin=sequential_seq_mmap  trial=1  N=1000000  P=128  C=10000  T=8
+Skipping gen; found “files/unsorted_1000000_128.bin”.
+[generate_unsorted   ]      0.841 ms
+[reading             ]    117.186 ms
+[reading_and_sorting ]    211.517 ms
+[writing             ]    624.333 ms
+File is sorted.
+[check_if_sorted     ]     33.196 ms
+[task 33] done  → results/sequential_seq_mmap.csv
+[task 34] bin=sequential_seq_mmap  trial=1  N=1000000  P=128  C=10000  T=16
+Skipping gen; found “files/unsorted_1000000_128.bin”.
+[generate_unsorted   ]      0.803 ms
+[reading             ]    120.200 ms
+[reading_and_sorting ]    214.472 ms
+[writing             ]    651.030 ms
+File is sorted.
+[check_if_sorted     ]     32.550 ms
+[task 34] done  → results/sequential_seq_mmap.csv
+[task 35] bin=sequential_seq_mmap  trial=1  N=1000000  P=128  C=10000  T=32
+Skipping gen; found “files/unsorted_1000000_128.bin”.
+[generate_unsorted   ]      0.841 ms
+[reading             ]    114.835 ms
+[reading_and_sorting ]    209.213 ms
+[writing             ]    699.376 ms
+File is sorted.
+[check_if_sorted     ]     32.275 ms
+[task 35] done  → results/sequential_seq_mmap.csv
+[task 36] bin=sequential_seq_mmap  trial=1  N=10000000  P=8  C=10000  T=1
+Skipping gen; found “files/unsorted_10000000_8.bin”.
+[generate_unsorted   ]      0.729 ms
+[reading             ]    322.725 ms
+[reading_and_sorting ]   1404.761 ms
+[writing             ]   1779.735 ms
+File is sorted.
+[check_if_sorted     ]     79.928 ms
+[task 36] done  → results/sequential_seq_mmap.csv
+[task 37] bin=sequential_seq_mmap  trial=1  N=10000000  P=8  C=10000  T=2
+Skipping gen; found “files/unsorted_10000000_8.bin”.
+[generate_unsorted   ]      0.826 ms
+[reading             ]    333.255 ms
+[reading_and_sorting ]   1413.285 ms
+[writing             ]   1719.385 ms
+File is sorted.
+[check_if_sorted     ]     83.100 ms
+[task 37] done  → results/sequential_seq_mmap.csv
+[task 38] bin=sequential_seq_mmap  trial=1  N=10000000  P=8  C=10000  T=4
+Skipping gen; found “files/unsorted_10000000_8.bin”.
+[generate_unsorted   ]      0.773 ms
+[reading             ]    333.387 ms
+[reading_and_sorting ]   1414.094 ms
+[writing             ]   1716.345 ms
+File is sorted.
+[check_if_sorted     ]     81.388 ms
+[task 38] done  → results/sequential_seq_mmap.csv
+[task 39] bin=sequential_seq_mmap  trial=1  N=10000000  P=8  C=10000  T=8
+Skipping gen; found “files/unsorted_10000000_8.bin”.
+[generate_unsorted   ]      0.728 ms
+[reading             ]    327.876 ms
+[reading_and_sorting ]   1410.407 ms
+[writing             ]   1739.387 ms
+File is sorted.
+[check_if_sorted     ]     80.823 ms
+[task 39] done  → results/sequential_seq_mmap.csv
+[task 40] bin=sequential_seq_mmap  trial=1  N=10000000  P=8  C=10000  T=16
+Skipping gen; found “files/unsorted_10000000_8.bin”.
+[generate_unsorted   ]      0.807 ms
+[reading             ]    338.506 ms
+[reading_and_sorting ]   1419.138 ms
+[writing             ]   1688.889 ms
+File is sorted.
+[check_if_sorted     ]     79.641 ms
+[task 40] done  → results/sequential_seq_mmap.csv
+[task 41] bin=sequential_seq_mmap  trial=1  N=10000000  P=8  C=10000  T=32
+Skipping gen; found “files/unsorted_10000000_8.bin”.
+[generate_unsorted   ]      0.799 ms
+[reading             ]    326.986 ms
+[reading_and_sorting ]   1407.715 ms
+[writing             ]   1731.149 ms
+File is sorted.
+[check_if_sorted     ]     79.639 ms
+[task 41] done  → results/sequential_seq_mmap.csv
+[task 42] bin=sequential_seq_mmap  trial=1  N=10000000  P=32  C=10000  T=1
+Skipping gen; found “files/unsorted_10000000_32.bin”.
+[generate_unsorted   ]      0.739 ms
+[reading             ]    489.562 ms
+[reading_and_sorting ]   1569.635 ms
+[writing             ]   2593.868 ms
+File is sorted.
+[check_if_sorted     ]    174.179 ms
+[task 42] done  → results/sequential_seq_mmap.csv
+[task 43] bin=sequential_seq_mmap  trial=1  N=10000000  P=32  C=10000  T=2
+Skipping gen; found “files/unsorted_10000000_32.bin”.
+[generate_unsorted   ]      0.820 ms
+[reading             ]    494.284 ms
+[reading_and_sorting ]   1574.660 ms
+[writing             ]   2637.316 ms
+File is sorted.
+[check_if_sorted     ]    134.878 ms
+[task 43] done  → results/sequential_seq_mmap.csv
+[task 44] bin=sequential_seq_mmap  trial=1  N=10000000  P=32  C=10000  T=4
+Skipping gen; found “files/unsorted_10000000_32.bin”.
+[generate_unsorted   ]      0.735 ms
+[reading             ]    499.281 ms
+[reading_and_sorting ]   1580.851 ms
+[writing             ]   2651.315 ms
+File is sorted.
+[check_if_sorted     ]    133.937 ms
+[task 44] done  → results/sequential_seq_mmap.csv
+[task 45] bin=sequential_seq_mmap  trial=1  N=10000000  P=32  C=10000  T=8
+Skipping gen; found “files/unsorted_10000000_32.bin”.
+[generate_unsorted   ]      0.849 ms
+[reading             ]    501.326 ms
+[reading_and_sorting ]   1582.244 ms
+[writing             ]   2595.803 ms
+File is sorted.
+[check_if_sorted     ]    137.399 ms
+[task 45] done  → results/sequential_seq_mmap.csv
+[task 46] bin=sequential_seq_mmap  trial=1  N=10000000  P=32  C=10000  T=16
+Skipping gen; found “files/unsorted_10000000_32.bin”.
+[generate_unsorted   ]      0.821 ms
+[reading             ]    496.212 ms
+[reading_and_sorting ]   1578.221 ms
+[writing             ]   2610.295 ms
+File is sorted.
+[check_if_sorted     ]    134.270 ms
+[task 46] done  → results/sequential_seq_mmap.csv
+[task 47] bin=sequential_seq_mmap  trial=1  N=10000000  P=32  C=10000  T=32
+Skipping gen; found “files/unsorted_10000000_32.bin”.
+[generate_unsorted   ]      0.757 ms
+[reading             ]    498.391 ms
+[reading_and_sorting ]   1580.270 ms
+[writing             ]   2618.256 ms
+File is sorted.
+[check_if_sorted     ]    135.060 ms
+[task 47] done  → results/sequential_seq_mmap.csv
+[task 48] bin=sequential_seq_mmap  trial=1  N=10000000  P=128  C=10000  T=1
+Skipping gen; found “files/unsorted_10000000_128.bin”.
+[generate_unsorted   ]      0.917 ms
+[reading             ]   1150.933 ms
+[reading_and_sorting ]   2233.464 ms
+[writing             ]   6283.063 ms
+File is sorted.
+[check_if_sorted     ]    320.553 ms
+[task 48] done  → results/sequential_seq_mmap.csv
+[task 49] bin=sequential_seq_mmap  trial=1  N=10000000  P=128  C=10000  T=2
+Skipping gen; found “files/unsorted_10000000_128.bin”.
+[generate_unsorted   ]      0.836 ms
+[reading             ]   1133.643 ms
+[reading_and_sorting ]   2213.295 ms
+[writing             ]   6259.504 ms
+File is sorted.
+[check_if_sorted     ]    324.218 ms
+[task 49] done  → results/sequential_seq_mmap.csv
+[task 50] bin=sequential_seq_mmap  trial=1  N=10000000  P=128  C=10000  T=4
+Skipping gen; found “files/unsorted_10000000_128.bin”.
+[generate_unsorted   ]      0.806 ms
+[reading             ]   1147.209 ms
+[reading_and_sorting ]   2230.700 ms
+[writing             ]   6444.768 ms
+File is sorted.
+[check_if_sorted     ]    308.808 ms
+[task 50] done  → results/sequential_seq_mmap.csv
+[task 51] bin=sequential_seq_mmap  trial=1  N=10000000  P=128  C=10000  T=8
+Skipping gen; found “files/unsorted_10000000_128.bin”.
+[generate_unsorted   ]      0.853 ms
+[reading             ]   1142.021 ms
+[reading_and_sorting ]   2222.942 ms
+[writing             ]   6316.609 ms
+File is sorted.
+[check_if_sorted     ]    316.342 ms
+[task 51] done  → results/sequential_seq_mmap.csv
+[task 52] bin=sequential_seq_mmap  trial=1  N=10000000  P=128  C=10000  T=16
+Skipping gen; found “files/unsorted_10000000_128.bin”.
+[generate_unsorted   ]      0.823 ms
+[reading             ]   1141.380 ms
+[reading_and_sorting ]   2220.447 ms
+[writing             ]   6158.059 ms
+File is sorted.
+[check_if_sorted     ]    331.315 ms
+[task 52] done  → results/sequential_seq_mmap.csv
+[task 53] bin=sequential_seq_mmap  trial=1  N=10000000  P=128  C=10000  T=32
+Skipping gen; found “files/unsorted_10000000_128.bin”.
+[generate_unsorted   ]      0.742 ms
+[reading             ]   1132.323 ms
+[reading_and_sorting ]   2212.033 ms
+[writing             ]   6393.365 ms
+File is sorted.
+[check_if_sorted     ]    329.411 ms
+[task 53] done  → results/sequential_seq_mmap.csv
+[task 54] bin=sequential_seq_mmap  trial=1  N=100000000  P=8  C=10000  T=1
+Skipping gen; found “files/unsorted_100000000_8.bin”.
+[generate_unsorted   ]      0.783 ms
+[reading             ]   3269.799 ms
+[reading_and_sorting ]  15716.993 ms
+[writing             ]  18060.339 ms
+File is sorted.
+[check_if_sorted     ]    813.550 ms
+[task 54] done  → results/sequential_seq_mmap.csv
+[task 55] bin=sequential_seq_mmap  trial=1  N=100000000  P=8  C=10000  T=2
+Skipping gen; found “files/unsorted_100000000_8.bin”.
+[generate_unsorted   ]      0.775 ms
+[reading             ]   3259.744 ms
+[reading_and_sorting ]  15710.130 ms
+[writing             ]  17182.907 ms
+File is sorted.
+[check_if_sorted     ]    815.664 ms
+[task 55] done  → results/sequential_seq_mmap.csv
+[task 56] bin=sequential_seq_mmap  trial=1  N=100000000  P=8  C=10000  T=4
+Skipping gen; found “files/unsorted_100000000_8.bin”.
+[generate_unsorted   ]      0.828 ms
+[reading             ]   3253.940 ms
+[reading_and_sorting ]  15709.471 ms
+[writing             ]  18135.941 ms
+File is sorted.
+[check_if_sorted     ]    797.025 ms
+[task 56] done  → results/sequential_seq_mmap.csv
+[task 57] bin=sequential_seq_mmap  trial=1  N=100000000  P=8  C=10000  T=8
+Skipping gen; found “files/unsorted_100000000_8.bin”.
+[generate_unsorted   ]      0.840 ms
+[reading             ]   3259.022 ms
+[reading_and_sorting ]  15719.053 ms
+[writing             ]  17932.826 ms
+File is sorted.
+[check_if_sorted     ]    817.683 ms
+[task 57] done  → results/sequential_seq_mmap.csv
+[task 58] bin=sequential_seq_mmap  trial=1  N=100000000  P=8  C=10000  T=16
+Skipping gen; found “files/unsorted_100000000_8.bin”.
+[generate_unsorted   ]      0.767 ms
+[reading             ]   3282.246 ms
+[reading_and_sorting ]  15733.035 ms
+[writing             ]  16905.620 ms
+File is sorted.
+[check_if_sorted     ]    812.423 ms
+[task 58] done  → results/sequential_seq_mmap.csv
+[task 59] bin=sequential_seq_mmap  trial=1  N=100000000  P=8  C=10000  T=32
+Skipping gen; found “files/unsorted_100000000_8.bin”.
+[generate_unsorted   ]      0.746 ms
+[reading             ]   3205.622 ms
+[reading_and_sorting ]  15658.665 ms
+[writing             ]  16842.317 ms
+File is sorted.
+[check_if_sorted     ]    811.777 ms
+[task 59] done  → results/sequential_seq_mmap.csv
+[task 60] bin=sequential_seq_mmap  trial=1  N=100000000  P=32  C=10000  T=1
+Skipping gen; found “files/unsorted_100000000_32.bin”.
+[generate_unsorted   ]      0.843 ms
+[reading             ]   4912.785 ms
+[reading_and_sorting ]  17315.956 ms
+[writing             ]  29426.796 ms
+File is sorted.
+[check_if_sorted     ]   1368.784 ms
+[task 60] done  → results/sequential_seq_mmap.csv
+[task 61] bin=sequential_seq_mmap  trial=1  N=100000000  P=32  C=10000  T=2
+Skipping gen; found “files/unsorted_100000000_32.bin”.
+[generate_unsorted   ]      0.720 ms
+[reading             ]   5029.175 ms
+[reading_and_sorting ]  17433.152 ms
+[writing             ] 120177.352 ms
+File is sorted.
+[check_if_sorted     ]   1372.983 ms
+[task 61] done  → results/sequential_seq_mmap.csv
+[task 62] bin=sequential_seq_mmap  trial=1  N=100000000  P=32  C=10000  T=4
+Skipping gen; found “files/unsorted_100000000_32.bin”.
+[generate_unsorted   ]      0.767 ms
+[reading             ]   5072.160 ms
+[reading_and_sorting ]  17474.758 ms
+[writing             ]  28393.220 ms
+File is sorted.
+[check_if_sorted     ]   1396.893 ms
+[task 62] done  → results/sequential_seq_mmap.csv
+[task 63] bin=sequential_seq_mmap  trial=1  N=100000000  P=32  C=10000  T=8
+Skipping gen; found “files/unsorted_100000000_32.bin”.
+[generate_unsorted   ]      0.851 ms
+[reading             ]   4945.238 ms
+[reading_and_sorting ]  17344.103 ms
+[writing             ]  27482.093 ms
+File is sorted.
+[check_if_sorted     ]   1401.483 ms
+[task 63] done  → results/sequential_seq_mmap.csv
+[task 64] bin=sequential_seq_mmap  trial=1  N=100000000  P=32  C=10000  T=16
+Skipping gen; found “files/unsorted_100000000_32.bin”.
+[generate_unsorted   ]      0.818 ms
+[reading             ]   5010.919 ms
+[reading_and_sorting ]  17423.352 ms
+[writing             ] 108089.415 ms
+File is sorted.
+[check_if_sorted     ]   1342.731 ms
+[task 64] done  → results/sequential_seq_mmap.csv
+[task 65] bin=sequential_seq_mmap  trial=1  N=100000000  P=32  C=10000  T=32
+Skipping gen; found “files/unsorted_100000000_32.bin”.
+[generate_unsorted   ]      0.752 ms
+[reading             ]   5016.259 ms
+[reading_and_sorting ]  17417.559 ms
+[writing             ] 112660.757 ms
+File is sorted.
+[check_if_sorted     ]   1350.341 ms
+[task 65] done  → results/sequential_seq_mmap.csv
+[task 66] bin=sequential_seq_mmap  trial=1  N=100000000  P=128  C=10000  T=1
+Skipping gen; found “files/unsorted_100000000_128.bin”.
+[generate_unsorted   ]      0.825 ms
+[reading             ]  11365.735 ms
+[reading_and_sorting ]  23757.930 ms
+[writing             ] 282782.406 ms
+File is sorted.
+[check_if_sorted     ]   3076.907 ms
+[task 66] done  → results/sequential_seq_mmap.csv
+[task 67] bin=sequential_seq_mmap  trial=1  N=100000000  P=128  C=10000  T=2
+Skipping gen; found “files/unsorted_100000000_128.bin”.
+[generate_unsorted   ]      0.830 ms
+[reading             ]  11392.581 ms
+[reading_and_sorting ]  23796.001 ms
+[writing             ] 277179.106 ms
+File is sorted.
+[check_if_sorted     ]   3050.004 ms
+[task 67] done  → results/sequential_seq_mmap.csv
+[task 68] bin=sequential_seq_mmap  trial=1  N=100000000  P=128  C=10000  T=4
+Skipping gen; found “files/unsorted_100000000_128.bin”.
+[generate_unsorted   ]      0.774 ms
+[reading             ]  11332.964 ms
+[reading_and_sorting ]  23746.994 ms
+[writing             ] 264694.073 ms
+File is sorted.
+[check_if_sorted     ]   2994.636 ms
+[task 68] done  → results/sequential_seq_mmap.csv
+[task 69] bin=sequential_seq_mmap  trial=1  N=100000000  P=128  C=10000  T=8
+Skipping gen; found “files/unsorted_100000000_128.bin”.
+[generate_unsorted   ]      0.749 ms
+[reading             ]  11227.086 ms
+[reading_and_sorting ]  23642.031 ms
+[writing             ] 278670.179 ms
+File is sorted.
+[check_if_sorted     ]   3038.804 ms
+[task 69] done  → results/sequential_seq_mmap.csv
+[task 70] bin=sequential_seq_mmap  trial=1  N=100000000  P=128  C=10000  T=16
+Skipping gen; found “files/unsorted_100000000_128.bin”.
+[generate_unsorted   ]      0.761 ms
+[reading             ]  11421.086 ms
+[reading_and_sorting ]  23812.394 ms
+[writing             ]  68975.031 ms
+File is sorted.
+[check_if_sorted     ]   3056.683 ms
+[task 70] done  → results/sequential_seq_mmap.csv
+[task 71] bin=sequential_seq_mmap  trial=1  N=100000000  P=128  C=10000  T=32
+Skipping gen; found “files/unsorted_100000000_128.bin”.
+[generate_unsorted   ]      0.853 ms
+[reading             ]  11136.363 ms
+[reading_and_sorting ]  23555.431 ms
+[writing             ] 503608.677 ms
+File is sorted.
+[check_if_sorted     ]   2868.490 ms
+[task 71] done  → results/sequential_seq_mmap.csv
