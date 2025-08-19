@@ -30,7 +30,7 @@ RECORDS=(100000 1000000 10000000 100000000)
 PAYLOAD_MAX=(8 32 128)
 CUTOFFS=(10000)
 THREADS=(1 2 4 8 16 32)        # threads per MPI rank
-NODES=(1 2 4) # 8              # we submit one array per value here
+NODES=(1 2 4 8)                # we submit one array per value here
 
 # Optional safety: set to your cluster's cores per node (e.g., 32 or 64).
 # If >0, tasks with T > CORES_PER_NODE are skipped to avoid oversubscription.
