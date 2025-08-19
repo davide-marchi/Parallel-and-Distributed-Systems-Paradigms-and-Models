@@ -1,0 +1,9 @@
+[task 0] bin=sequential_seq_mmap  trial=1  N=1910480  P=32  C=10000  T=2
+Generated “files/unsorted_1910480_32.bin” (61132354 bytes).
+[generate_unsorted   ]    938.218 ms
+[reading             ]     35.519 ms
+[reading_and_sorting ]    220.872 ms
+[writing             ]    592.068 ms
+File is sorted.
+[check_if_sorted     ]     31.565 ms
+[task 0] done  → results/sequential_seq_mmap.csv

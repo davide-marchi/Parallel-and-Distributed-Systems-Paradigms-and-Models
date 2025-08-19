@@ -1,0 +1,9 @@
+[task 0] bin=ff_mmap  trial=1  N=1910480  P=32  C=10000  T=2
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      1.104 ms
+[reading             ]    128.661 ms
+[reading_and_sorting ]    411.499 ms
+[writing             ]    577.411 ms
+File is sorted.
+[check_if_sorted     ]     30.019 ms
+[task 0] done  → results/ff_mmap.csv

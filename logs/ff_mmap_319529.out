@@ -1,0 +1,9 @@
+[task 0] bin=ff_mmap  trial=1  N=3656807  P=32  C=10000  T=4
+mmap: Invalid argument
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.803 ms
+[reading             ]    206.553 ms
+[reading_and_sorting ]    375.831 ms
+[writing             ]  11239.558 ms
+[check_if_sorted     ]      0.547 ms
+[task 0] done  → results/ff_mmap.csv

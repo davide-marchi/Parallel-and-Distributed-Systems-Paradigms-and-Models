@@ -1,0 +1,9 @@
+[task 0] bin=omp_mmap  trial=1  N=7011582  P=32  C=10000  T=8
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      0.907 ms
+[reading             ]    450.716 ms
+[reading_and_sorting ]    732.522 ms
+[writing             ]   9367.774 ms
+File is sorted.
+[check_if_sorted     ]    622.509 ms
+[task 0] done  → results/omp_mmap.csv
