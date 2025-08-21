@@ -1,0 +1,162 @@
+[task 0] bin=mpi_omp_mmap trial=1 N=1910480 P=32 C=10000 T=1 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      0.926 ms
+[reading             ]    139.181 ms
+[reading_and_sorting ]    311.225 ms
+[writing             ]    611.268 ms
+File is sorted.
+[check_if_sorted     ]     39.318 ms
+[task 0] done → results/mpi_omp_mmap.csv
+[task 1] bin=mpi_omp_mmap trial=1 N=1910480 P=32 C=10000 T=2 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      0.946 ms
+[reading             ]    143.192 ms
+[reading_and_sorting ]    300.553 ms
+[writing             ]    593.522 ms
+File is sorted.
+[check_if_sorted     ]     32.752 ms
+[task 1] done → results/mpi_omp_mmap.csv
+[task 2] bin=mpi_omp_mmap trial=1 N=1910480 P=32 C=10000 T=4 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      1.211 ms
+[reading             ]    144.061 ms
+[reading_and_sorting ]    294.064 ms
+[writing             ]    607.473 ms
+File is sorted.
+[check_if_sorted     ]     45.069 ms
+[task 2] done → results/mpi_omp_mmap.csv
+[task 3] bin=mpi_omp_mmap trial=1 N=1910480 P=32 C=10000 T=8 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      0.863 ms
+[reading             ]    138.981 ms
+[reading_and_sorting ]    286.307 ms
+[writing             ]    606.667 ms
+File is sorted.
+[check_if_sorted     ]     30.958 ms
+[task 3] done → results/mpi_omp_mmap.csv
+[task 4] bin=mpi_omp_mmap trial=1 N=1910480 P=32 C=10000 T=16 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      0.790 ms
+[reading             ]    137.538 ms
+[reading_and_sorting ]    281.403 ms
+[writing             ]    631.851 ms
+File is sorted.
+[check_if_sorted     ]     38.243 ms
+[task 4] done → results/mpi_omp_mmap.csv
+[task 5] bin=mpi_omp_mmap trial=1 N=1910480 P=32 C=10000 T=32 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_1910480_32.bin”.
+[generate_unsorted   ]      0.784 ms
+[reading             ]    127.804 ms
+[reading_and_sorting ]    267.842 ms
+[writing             ]    590.341 ms
+File is sorted.
+[check_if_sorted     ]     32.017 ms
+[task 5] done → results/mpi_omp_mmap.csv
+[task 6] bin=mpi_omp_mmap trial=1 N=3656807 P=32 C=10000 T=1 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.953 ms
+[reading             ]    255.266 ms
+[reading_and_sorting ]    586.587 ms
+[writing             ]   1129.041 ms
+File is sorted.
+[check_if_sorted     ]     58.182 ms
+[task 6] done → results/mpi_omp_mmap.csv
+[task 7] bin=mpi_omp_mmap trial=1 N=3656807 P=32 C=10000 T=2 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.888 ms
+[reading             ]    263.476 ms
+[reading_and_sorting ]    567.172 ms
+[writing             ]   1157.537 ms
+File is sorted.
+[check_if_sorted     ]     61.487 ms
+[task 7] done → results/mpi_omp_mmap.csv
+[task 8] bin=mpi_omp_mmap trial=1 N=3656807 P=32 C=10000 T=4 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.836 ms
+[reading             ]    258.675 ms
+[reading_and_sorting ]    552.851 ms
+[writing             ]   1115.114 ms
+File is sorted.
+[check_if_sorted     ]     55.978 ms
+[task 8] done → results/mpi_omp_mmap.csv
+[task 9] bin=mpi_omp_mmap trial=1 N=3656807 P=32 C=10000 T=8 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.923 ms
+[reading             ]    269.236 ms
+[reading_and_sorting ]    541.961 ms
+[writing             ]   1160.984 ms
+File is sorted.
+[check_if_sorted     ]     55.642 ms
+[task 9] done → results/mpi_omp_mmap.csv
+[task 10] bin=mpi_omp_mmap trial=1 N=3656807 P=32 C=10000 T=16 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.889 ms
+[reading             ]    264.628 ms
+[reading_and_sorting ]    526.621 ms
+[writing             ]   1146.172 ms
+File is sorted.
+[check_if_sorted     ]     52.850 ms
+[task 10] done → results/mpi_omp_mmap.csv
+[task 11] bin=mpi_omp_mmap trial=1 N=3656807 P=32 C=10000 T=32 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_3656807_32.bin”.
+[generate_unsorted   ]      0.829 ms
+[reading             ]    247.163 ms
+[reading_and_sorting ]    500.370 ms
+[writing             ]   1011.140 ms
+File is sorted.
+[check_if_sorted     ]     60.298 ms
+[task 11] done → results/mpi_omp_mmap.csv
+[task 12] bin=mpi_omp_mmap trial=1 N=7011582 P=32 C=10000 T=1 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      0.937 ms
+[reading             ]    508.111 ms
+[reading_and_sorting ]   1166.139 ms
+[writing             ]   2218.156 ms
+File is sorted.
+[check_if_sorted     ]    101.644 ms
+[task 12] done → results/mpi_omp_mmap.csv
+[task 13] bin=mpi_omp_mmap trial=1 N=7011582 P=32 C=10000 T=2 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      0.853 ms
+[reading             ]    514.822 ms
+[reading_and_sorting ]   1112.596 ms
+[writing             ]   2190.853 ms
+File is sorted.
+[check_if_sorted     ]    109.677 ms
+[task 13] done → results/mpi_omp_mmap.csv
+[task 14] bin=mpi_omp_mmap trial=1 N=7011582 P=32 C=10000 T=4 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      1.075 ms
+[reading             ]    510.018 ms
+[reading_and_sorting ]   1070.413 ms
+[writing             ]   2116.384 ms
+File is sorted.
+[check_if_sorted     ]    108.009 ms
+[task 14] done → results/mpi_omp_mmap.csv
+[task 15] bin=mpi_omp_mmap trial=1 N=7011582 P=32 C=10000 T=8 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      0.896 ms
+[reading             ]    496.570 ms
+[reading_and_sorting ]   1022.509 ms
+[writing             ]   2178.596 ms
+File is sorted.
+[check_if_sorted     ]    102.708 ms
+[task 15] done → results/mpi_omp_mmap.csv
+[task 16] bin=mpi_omp_mmap trial=1 N=7011582 P=32 C=10000 T=16 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      1.011 ms
+[reading             ]    509.902 ms
+[reading_and_sorting ]   1009.916 ms
+[writing             ]   2172.517 ms
+File is sorted.
+[check_if_sorted     ]    112.423 ms
+[task 16] done → results/mpi_omp_mmap.csv
+[task 17] bin=mpi_omp_mmap trial=1 N=7011582 P=32 C=10000 T=32 NODES=4 RANKS=4
+Skipping gen; found “files/unsorted_7011582_32.bin”.
+[generate_unsorted   ]      0.836 ms
+[reading             ]    465.177 ms
+[reading_and_sorting ]    945.100 ms
+[writing             ]   1929.753 ms
+File is sorted.
+[check_if_sorted     ]     94.042 ms
+[task 17] done → results/mpi_omp_mmap.csv
