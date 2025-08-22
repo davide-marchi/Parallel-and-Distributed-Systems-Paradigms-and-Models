@@ -25,10 +25,11 @@ Agosto 2025
 4. Single node implementations
     - The code are based on the following structure: reading the file record by record and filling a vercotr or stuct IndexRec (describe it), then ordering the vector of IndexRec, then writing the ordered file depending on the ordered vector (i read on the IndexRec where the payload is, read it from the unsorted file, then write the record in the right position of the ordered file)
     - Also for parallel version during the mergesort the task which consists in ordering an array or less than 10000 elements aresolved linearly with std::sort to avoid unnecery overhead. 10000 is thus considered as a "base case"
+    - All the solutions has been programmed to have a memory usage that (thanks to the usage of the IndexRec vector) grows linearly with the number of elements ignoring the maximum payload
 
     4.1 Sequential code
         - Just reading the file, sorting using std::sort, then writing the ordered file, no overlap whatsoever
-    
+
     4.2 FastFlow code
         - use one farm (n threads -> 1 emitter and n-1 workers)
         - if only one thread is available then we just call std::sort without using any farm
@@ -45,8 +46,8 @@ Agosto 2025
         - uses the ProgressGate as the ff code
             - each leaf of the treee is a base case of at most 10000 elements, which knows which elements require,  so it sleeps until they have been read
             - reading worker wakes up every thread waiting every 10000 elements (best case)
-    
-    4.4 Analysis
+
+    4.4 Performance evaluation
         - I tried different length of the arrays, different max payloads and different number of threads
         - i compare sequential, ff and omp and i have the plots
         - Absolute speedup
@@ -57,6 +58,7 @@ Agosto 2025
             - execution time, relative speedup (strong), relative speedup (strong) efficiency (3 plots)
         - Scalability: Weak scaling - Num of elems vary with num of thread and fixed max payload = 32
             - execution time, relative speedup (weak), relative speedup efficiency (3 plots)
+
     4.5 Observations:
         - omp version with 1 thread is very bad (have to make sure that the task reading the file has finished using a taskwait before starting the recoursive merge task)
         - ff version with just 2 thread cant even beat the sequential cause one thread is stuck in the emitter duty, not actively ordering
@@ -73,12 +75,38 @@ Agosto 2025
 
     5.1 Single node sorting
         - each node osrt using opm, choosen for the better performance on greater number of nodes and for the semplicity of the code
+        - The merging process after receiving the already ordered array from another node is not parallelized in the other end
 
-    5.2 Analysis
+    5.2 Performance evaluation
         - on the x-axis we now have the number of nodes
         - different lines are different number of threads per node
         - we always have one process per node
-        - ...... TODO
+        - analysis for the MPI version is done exclusively with the "balanced case" with max payload of 32 bytes
+        - Absolute speedup
+            - execution time (reading + sorting)varying N but with fixed max payload = 32   (3 plots)
+            - execution time + absolute speedup plots + absolute speedup efficiency (fixed elements and max payload)       (3 plots)
+        - Scalability: Strong scaling - Fixed num of elems = 100.000.000 and max payload = 32
+            - execution time, relative speedup (strong), relative speedup (strong) efficiency (3 plots)
+        - Scalability: Weak scaling - Num of elems vary with num of nodes and fixed max payload = 32
+            - execution time, relative speedup (weak), relative speedup efficiency (3 plots)
 
+    5.3 Observations
+        - With one or few threads per node we gain better results by distributing the work on multiple nodes
+        - While increasing the threads per node we actually lose performances by spreading the work on multiple nodes
+        - This behaviours is because the faster we compute the sorting on the single node and the more is the proportion of the time we spend on sending and receiving the elements (either to sort or already sorted)
+        - With 32 threads per node for example the time we spend on communication overcome the gain in performance that we obtain from splitting the work over 8 nodes. Making the execution communication bound
 
-6. Approximative cost model? Bootlenecks?? comp-to-comm overlap???
+6. Approximative cost model for the distributed solution? Bootlenecks? comp-to-comm overlap?
+    - [yet to be defined]
+    - i'd like to propose as a cost model a sort of graph of dependencies which im gonna draw,something that resemble a BSP algorithm
+    - something which resemble (algoritmically and ignoring the varying number of nodes):
+        - reading_and_sending_cost = (file_size/reading_speed) + (IndexRec_vector_size/communication_speed)
+        - sorting_and_merging_and_collecting_cost = (sort_cost(elements_num) + (IndexRec_vector_size/communication_speed)) + (merge_cost(elements_num) + (IndexRec_vector_size/communication_speed)) * log2(elements_num)
+        - writing_cost = (file_size/reading_speed) + (file_size/writing_speed)
+        - total_cost = reading_and_sending_cost + sorting_and_merging_and_collecting_cost + writing_cost
+    - It's a simplified mathematical representation of the cost which ignores:
+        - The fact that every node during the merging phase does not send all the array, but something smaller is ignored
+        - The fact that the the sorting phase of the nodes stars before all the array has been read, so the nodes thends to finish before than in the expected model, but still, considering that we are searching for the longest path while extimating the cost this should end up being irrelevant logaritmichally speaking
+    - With the formulas we observe that BOTH the computaton cost and che communcation cost grow with O(N*logN), so independently from N if one of the two is particularly more efifcient than the other (see cases with 1 thread per node vs 32 threads per node) both of them can end up being the bottleneck
+    - Anyway, code uses MPI_Isend to overlapp reading with sending
+    - And the sorting + merging is managed in a way that every node send and receive as soon as possible, without haveing global barriers where every nodes wait for all the other

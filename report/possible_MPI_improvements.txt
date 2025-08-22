@@ -1,0 +1,17 @@
+1. Master node should keep for himself to merge the last part of the array
+
+2. During merging phase:
+    Nodes that dont have to send could start an asynchronous Irecv BEFORE starting to merge.
+    In this way as soon as they have merged they already have the next ordered array to merge with!
+    like:
+   
+        a = sort(a)
+        b = Recv
+        while(i dont have to send):
+            wait(c)
+            b = c
+            c = Irecv
+            a = merge(a, b)
+
+
+            
