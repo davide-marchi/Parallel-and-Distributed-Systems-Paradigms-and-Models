@@ -89,4 +89,45 @@ In the multi node variant, I run one MPI rank per node. A designated rank reads 
 
 The primary metrics are total time for index build plus sort, speedup \(S_p = T_1 / T_p\), and efficiency \(E_p = S_p / p\). For single node studies, \(p\) is the thread count. For distributed studies, \(p\) is the product of nodes and threads if noted, or the number of threads per rank when speedup is plotted against nodes. Strong scaling holds \(N\) fixed while varying \(p\). Weak scaling grows \(N\) proportionally to \(p\).
 
+% =========================================================
+\section{Memory and I/O considerations}
+My design keeps memory usage proportional to the number of records rather than to the maximum payload size or to an arbitrary buffer. I maintain an in memory index of length \(N\), where each entry stores only the information required to order and later locate a record: \(\{\texttt{key}, \texttt{pos}, \texttt{len}\}\). The footprint is therefore \(O(N)\) with a small constant factor that depends on the sizes of these fields, and it does not depend on the maximum payload parameter \(P\). During rewrite I stream each payload directly from the unsorted file into the output without caching all payloads in RAM.
+
+\subsection{Why I use memory mapping}
+I use \texttt{mmap} for both reading and writing. This choice avoids explicit user space I/O buffers and lets the operating system handle paging and readahead. It is well suited to the two access patterns in this project:
+\begin{itemize}
+  \item During index build, I scan the file record by record and read only \texttt{key} and \texttt{len}. Mapping the file allows the kernel to fault in pages efficiently and to reuse them across passes when the page cache is warm.
+  \item During rewrite, I must fetch payloads at the original positions and emit them in sorted order. This requires many random reads of the source and a sequential write to the destination. With \texttt{mmap} I can copy exactly \texttt{len} bytes per record from the mapped source region to the mapped destination region without building large staging buffers.
+\end{itemize}
+This approach keeps per record work bounded and predictable, and it aligns with the constraint that the file may be much larger than available RAM.
+
+\subsection{Single threaded disk access}
+On the shared cluster, attempts to parallelize disk access did not produce stable gains. Running multiple threads that read or write concurrently tended to increase queue contention and amplify interference from other users on the same storage. I therefore adopt a conservative policy:
+\begin{enumerate}
+  \item I perform file I/O with a single thread at a time.
+  \item I exclude the rewrite phase from the primary performance graphs and focus the analysis on index build plus sorting.
+\end{enumerate}
+This policy isolates the compute and indexing behavior of the implementations from storage noise and makes cross run comparisons meaningful.
+
+\subsection{Variability of the write phase}
+The write phase is highly volatile on the target system. In three executions of the same configuration, the time to rewrite the sorted file differed by almost an order of magnitude. Table~\ref{tab:write-variance} reports the raw measurements.
+
+\begin{table}[h]
+  \centering
+  \caption{Observed variability of the rewrite phase for identical runs}
+  \label{tab:write-variance}
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Run & Write time (s) & Notes \\
+    \midrule
+    1   & 68.97   & light system load \\
+    2   & 264.69  & moderate contention \\
+    3   & 503.60  & heavy contention \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Given this spread, including rewrite time in the main figures would mask the effects I want to study. I still execute the full pipeline in every run and I always validate correctness on the \emph{written} output file from disk, but I report index build plus sorting as the primary metric in Sections~4 and 5.
+
+
 \end{document}
