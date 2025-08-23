@@ -14,6 +14,16 @@
 \usepackage{float}
 \usepackage[hidelinks]{hyperref}
 
+\usepackage{titling} % for \pretitle, \posttitle, etc.
+\newcommand{\HRule}{\rule{\linewidth}{0.6pt}}
+
+\pretitle{\begin{center}\HRule\\[1.2ex]\LARGE}
+\posttitle{\\[1.2ex]\HRule\end{center}}
+\preauthor{\begin{center}\large}
+\postauthor{\end{center}}
+\predate{\begin{center}}
+\postdate{\end{center}}
+
 % ---------- Formatting ----------
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.6em}
@@ -32,9 +42,19 @@ Project 1 (MergeSort) Report}
 \date{August 2025}
 
 \begin{document}
+% No page numbers on title and ToC
+\pagenumbering{gobble}
+
 \maketitle
+\clearpage
+
 \tableofcontents
 \clearpage
+
+% Start numbering (1) from here
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
 
 % =========================================================
 \section{Introduction}
