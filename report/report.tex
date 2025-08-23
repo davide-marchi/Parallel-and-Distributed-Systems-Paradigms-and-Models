@@ -244,4 +244,89 @@ The measurements support the following points.
   \item \textbf{Memory bound cases.} With few elements and large payloads the execution tends to be memory bound. During index build, I use \texttt{mmap}, so reading one record faults in a whole page. Larger payloads reduce the number of keys per page, which increases the number of pages that need to be fetched and slows the index build.
 \end{itemize}
 
+% =========================================================
+\section{Multi node implementations}
+
+I implement a hybrid MPI plus OpenMP solution with one MPI process per node and a variable number of OpenMP threads per process. Only one node touches the disk at a time. I observed that overlapping disk activity across nodes did not improve performance on the shared Slurm cluster and that concurrent I/O from different jobs increased contention, so I serialize disk access.
+
+\subsection{Implementation overview}
+Rank 0 reads the unsorted file and builds the global \texttt{IndexRec} array. As soon as \(\lfloor N/P \rfloor\) entries are ready, where \(P\) is the number of nodes, rank 0 partitions the index into contiguous slices and starts sending them asynchronously with \texttt{MPI\_Isend}. Each receiver posts \texttt{MPI\_Irecv}, sorts its local slice with OpenMP, then participates in a pairwise merge schedule. Merging proceeds in \(\lceil \log_2 P \rceil\) rounds. In round \(r\), rank \(i\) exchanges data with partner \(i \oplus 2^r\) when the partner exists. The receiver merges two sorted segments into one larger sorted segment. At the end of the last round, rank 0 holds the globally sorted index, rewrites the output file, and validates correctness on the written file. No node other than rank 0 writes the output file.
+
+\subsection{Single node sorting}
+On each node I sort the local slice with OpenMP tasks, using the same top down mergesort as in the single node section and the same base case of 10\,000 elements that falls back to \texttt{std::sort}. I keep the post-receive merge single threaded on the destination rank, both for simplicity and because each merge is short at the chunk sizes I use; the extra synchronization and cache traffic of a multithreaded merge would likely outweigh any benefit.
+
+
+\subsection{Performance evaluation}
+I analyze the MPI version in the balanced case with \(\text{payload}_{\max}=32\) bytes. The x axis is always the number of nodes. Lines in each plot denote different thread counts per node. There is exactly one MPI process per node. All times exclude the rewrite phase as discussed in Section~3.
+
+\subsubsection{Execution times over nodes}
+I report the total time
+\[
+T \;=\; T_{\text{build-index}} \;+\; T_{\text{sort-index}} \;+\; T_{\text{distributed-merges}} \, ,
+\]
+for several dataset sizes \(N\) at fixed \(\text{payload}_{\max}=32\). The three panels show small, medium, and large \(N\).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/mpi_time_varyN.png}
+  \caption{Execution time \(T\) versus nodes at \(\text{payload}_{\max}=32\). Panels correspond to increasing \(N\). Lines are threads per node.}
+  \label{fig:mpi-time-varyN}
+\end{figure}
+
+\subsubsection{Absolute speedup at fixed size}
+Absolute speedup compares MPI performance to the best sequential baseline on the same dataset:
+\[
+S_{\text{abs}}(P,t) \;=\; \frac{T_{\text{seq}}^{\ast}(N)}{T_{\text{mpi}}(P,t,N)} \, ,
+\]
+where \(P\) is nodes, \(t\) is threads per node, and \(T_{\text{seq}}^{\ast}(N)\) is the fastest observed sequential time at size \(N\). I also report absolute efficiency that normalizes by the number of nodes:
+\[
+E_{\text{abs}}(P,t) \;=\; \frac{S_{\text{abs}}(P,t)}{P} \, .
+\]
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/mpi_abs_fixedN_time_speedup_efficiency.png}
+  \caption{Fixed \(N\) and \(\text{payload}_{\max}=32\): time \(T\), absolute speedup \(S_{\text{abs}}\), and absolute efficiency \(E_{\text{abs}}\) versus nodes. Lines are threads per node.}
+  \label{fig:mpi-abs-fixedN}
+\end{figure}
+
+\subsubsection{Strong scalability}
+For strong scaling I fix \(N=100{,}000{,}000\) and \(\text{payload}_{\max}=32\). I define relative speedup per thread count as
+\[
+S_{\text{strong}}(P; t) \;=\; \frac{T_{\text{mpi}}(1, t, N)}{T_{\text{mpi}}(P, t, N)} \, , \qquad
+E_{\text{strong}}(P; t) \;=\; \frac{S_{\text{strong}}(P; t)}{P} \, .
+\]
+Each curve uses its own one node baseline at the same \(t\).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/mpi_strong_scaling_time_speedup_efficiency.png}
+  \caption{Strong scaling at \(N=100{,}000{,}000\) and \(\text{payload}_{\max}=32\): time, relative speedup \(S_{\text{strong}}\), and efficiency \(E_{\text{strong}}\) versus nodes.}
+  \label{fig:mpi-strong}
+\end{figure}
+
+\subsubsection{Weak scalability}
+For weak scaling I increase the number of elements with the number of nodes to reflect the \(O(N \log N)\) cost of sorting. I choose sizes \(N_P\) so that \(N_P \log_2 N_P\) grows approximately linearly with \(P\). Relative speedup and efficiency are
+\[
+S_{\text{weak}}(P; t) \;=\; \frac{T_{\text{mpi}}(1, t, N_1)}{T_{\text{mpi}}(P, t, N_P)} \, , \qquad
+E_{\text{weak}}(P; t) \;=\; \frac{S_{\text{weak}}(P; t)}{P} \, .
+\]
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/mpi_weak_scaling_time_speedup_efficiency.png}
+  \caption{Weak scaling with \(\text{payload}_{\max}=32\) and \(N_P\) chosen so that \(N_P \log_2 N_P\) scales with \(P\): time, relative speedup \(S_{\text{weak}}\), and efficiency \(E_{\text{weak}}\).}
+  \label{fig:mpi-weak}
+\end{figure}
+
+\subsection{Observations}
+The results show the following trends.
+
+\begin{itemize}
+  \item \textbf{Few threads per node.} With one or a few threads per node I gain by distributing across nodes. Communication costs are small relative to local sorting time, so adding nodes reduces time meaningfully.
+  \item \textbf{Many threads per node.} As I increase threads per node, local sorting becomes faster and the communication share grows. Beyond a point, spreading work across nodes hurts. For example, with 32 threads per node the communication time outweighs the benefit of splitting work across 8 nodes, making the run communication bound.
+  \item \textbf{Communication-bound crossover.} As on-node sorting speeds up, the fraction of time spent in communication grows. Message startup and bandwidth transfer for sending and receiving index segments dominate, so the execution becomes communication bound.
+  \item \textbf{Pairwise merge underutilization.} The pairwise merge schedule inherently halves the number of active ranks each round, which leaves increasing fractions of the cluster idle during merging as \(P\) grows. This structural underutilization is visible as a decreasing efficiency with more nodes in the strong and weak scaling plots.
+\end{itemize}
+
 \end{document}
