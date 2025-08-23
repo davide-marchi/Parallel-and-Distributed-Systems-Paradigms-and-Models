@@ -11,6 +11,7 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{siunitx}
+\usepackage{float}
 \usepackage[hidelinks]{hyperref}
 
 % ---------- Formatting ----------
@@ -129,5 +130,118 @@ The write phase is highly volatile on the target system. In three executions of 
 
 Given this spread, including rewrite time in the main figures would mask the effects I want to study. I still execute the full pipeline in every run and I always validate correctness on the \emph{written} output file from disk, but I report index build plus sorting as the primary metric in Sections~4 and 5.
 
+% =========================================================
+\section{Single node implementations}
+
+All single node variants share the same three stage pipeline: I first scan the file to build an in memory index of \(\{\texttt{key}, \texttt{pos}, \texttt{len}\}\) entries, then I sort this index, then I rewrite the output file by streaming each payload from the original position to its new position. Using the \texttt{IndexRec} vector keeps memory proportional to the number of records \(N\), independent of the maximum payload size \(P\). For the parallel variants I use a task based mergesort with a base case threshold of 10\,000 elements that falls back to \texttt{std::sort} to avoid unnecessary tasking overhead.
+
+\subsection{Sequential baseline}
+The sequential program performs no overlap. It scans the file and fills the \texttt{IndexRec} vector, sorts the entire vector with \texttt{std::sort}, then rewrites the output file by copying exactly \texttt{len} bytes for each record from the source mapping at \texttt{pos}. This run is my reference \(T_1\) for speedup.
+
+\subsection{FastFlow implementation}
+I use a single FastFlow farm. With \(n\) threads, the farm consists of one emitter and \(n-1\) workers.
+
+\begin{itemize}
+  \item \textbf{Single thread fallback.} If only one thread is available, I bypass the farm and call \texttt{std::sort} on the whole index.
+  \item \textbf{Tasking strategy.} The emitter first schedules the index build as the initial task. It then generates all mergesort tasks in a recursive manner. When a subarray size reaches the base case of 10\,000, the corresponding leaf task is enqueued immediately and executed with \texttt{std::sort}.
+  \item \textbf{Readiness gating.} To start sorting as soon as possible, leaf tasks coordinate with a \texttt{ProgressGate}. Each leaf knows its \([L, R)\) range of index entries and sleeps until the index builder signals that the required portion has been filled. The reading worker wakes up any waiting leaves every 10\,000 records in the best case.
+\end{itemize}
+
+This design allows the workers to overlap sorting of ready chunks with the ongoing index build. The emitter cost means that with \(n=2\) the farm has only one active worker, which directly affects that specific case in the results.
+
+\subsection{OpenMP implementation}
+I implement a task based top down mergesort over the \texttt{IndexRec} vector while the index is being built.
+
+\begin{itemize}
+  \item \textbf{Scheduling.} Inside a single OpenMP parallel region, I spawn one task that builds the index and, in parallel, I generate the mergesort task tree with \texttt{\#pragma omp task} and \texttt{taskgroup}. As in the FastFlow version, any subarray of size at most 10\,000 is handled by \texttt{std::sort}.
+  \item \textbf{Readiness gating.} Leaf tasks check the \texttt{ProgressGate} to ensure the needed slice of the index has been produced before proceeding.
+  \item \textbf{Single thread behavior.} When there is exactly one OpenMP thread, I enforce a \texttt{taskwait} after the index build task and \emph{before} spawning the merge tasks. This prevents the single available thread from being occupied by merge tasks that would block waiting for data the reader cannot produce concurrently.
+\end{itemize}
+
+\subsection{Performance evaluation}
+
+I evaluate index build plus sort time for the sequential, FastFlow, and OpenMP implementations over multiple input sizes, payload maxima, and thread counts. For each configuration I aggregate repeated runs and report medians.
+
+\subsubsection{Execution times}
+I report the total time
+\[
+T \;=\; T_{\text{build-index}} \;+\; T_{\text{sort-index}} \, .
+\]
+This excludes the rewrite phase as discussed in Section~3.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/seq_omp_ff_time_3x3.png}
+  \caption{Execution time \(T\) for index build plus sort across a \(3\times3\) grid of \((\text{records}, \text{payload}_{\max})\).}
+  \label{fig:time-3x3}
+\end{figure}
+
+\subsubsection{Absolute speedup}
+Absolute speedup is defined against the \emph{best sequential} time for the same dataset settings:
+\[
+S_{\text{abs}} \;=\; \frac{T_{\text{seq}}^{\ast}}{T_{\text{variant}}} \, ,
+\]
+where \(T_{\text{seq}}^{\ast}\) is the fastest observed sequential time for that \((N, \text{payload}_{\max})\) and \(T_{\text{variant}}\) is the time of the FastFlow or OpenMP run.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/seq_omp_ff_speedup_3x3.png}
+  \caption{Absolute speedup \(S_{\text{abs}}\) relative to the best sequential time on the same \(3\times3\) grid.}
+  \label{fig:speedup-3x3}
+\end{figure}
+
+\paragraph{Absolute efficiency.}
+To normalize for the number of threads, I also report \emph{absolute efficiency}
+\[
+E_{\text{abs}} \;=\; \frac{S_{\text{abs}}}{p}
+\;=\; \frac{T_{\text{seq}}^{\ast}}{p \cdot T_{\text{variant}}} \, ,
+\]
+where \(p\) is the thread count of the parallel run (for FastFlow, \(p\) is the total threads including the emitter). Values near 1 indicate near ideal utilization at that problem size; lower values reflect overheads or memory/IO bottlenecks.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/seq_omp_ff_efficiency_3x3.png}
+  \caption{Absolute efficiency \(E_{\text{abs}} = S_{\text{abs}}/p\) on the same \(3\times3\) grid of \((\text{records}, \text{payload}_{\max})\).}
+  \label{fig:abs-efficiency-3x3}
+\end{figure}
+
+
+\subsubsection{Strong scalability}
+For strong scaling I fix \(N\) and vary the thread count \(p\). I use relative speedup with respect to the \emph{same} parallel implementation at one thread:
+\[
+S_{\text{strong}}(p) \;=\; \frac{T_{\text{par}}(1,N)}{T_{\text{par}}(p,N)} \, .
+\]
+The figure shows time, relative speedup, and efficiency panels for completeness.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/strong_scaling_time_speedup_efficiency.png}
+  \caption{Strong scaling at \(N=100{,}000{,}000\) and \(\text{payload}_{\max}=32\): time, relative speedup \(S_{\text{strong}}(p)\), and efficiency.}
+  \label{fig:strong-scaling}
+\end{figure}
+
+\subsubsection{Weak scalability}
+For weak scaling I increase the number of elements with the thread count to reflect the \(O(N\log N)\) cost of sorting. I choose \(N_p\) so that \(N_p \log_2 N_p\) grows approximately linearly with \(p\), and I use relative speedup with respect to the parallel implementation at one thread:
+\[
+S_{\text{weak}}(p) \;=\; \frac{T_{\text{par}}(1, N_1)}{T_{\text{par}}(p, N_p)} \, .
+\]
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{imgs/weak_scaling_time_speedup_efficiency.png}
+  \caption{Weak scaling with \(N_p\) growing with \(p\) to reflect \(O(N\log N)\): time, relative speedup \(S_{\text{weak}}(p)\), and efficiency.}
+  \label{fig:weak-scaling}
+\end{figure}
+
+\subsection{Observations}
+The measurements support the following points.
+
+\begin{itemize}
+  \item \textbf{OpenMP with one thread.} The OpenMP version with a single thread is much slower than the sequential baseline. In this case I enforce a \texttt{taskwait} to ensure the reading task finishes before merging begins, which completely removes any overlap between reading and merging and likely contributes to the slowdown.
+  \item \textbf{FastFlow with two threads.} With exactly two threads, one acts as emitter and only one remains as a worker, so this specific case cannot beat the sequential baseline. For three or more threads, the FastFlow version outperforms the sequential baseline.
+  \item \textbf{Scaling with threads.} As I increase threads, both OpenMP and FastFlow outperform the sequential version. OpenMP is slightly better than FastFlow at higher thread counts due to lower runtime overheads.
+  \item \textbf{Effect of problem size and payload.} Speedup grows with the number of elements and shrinks with larger payloads. Larger \(N\) increases the compute share in sorting, while larger payloads increase page faults and time spent building the index relative to sorting.
+  \item \textbf{Memory bound cases.} With few elements and large payloads the execution tends to be memory bound. During index build, I use \texttt{mmap}, so reading one record faults in a whole page. Larger payloads reduce the number of keys per page, which increases the number of pages that need to be fetched and slows the index build.
+\end{itemize}
 
 \end{document}
