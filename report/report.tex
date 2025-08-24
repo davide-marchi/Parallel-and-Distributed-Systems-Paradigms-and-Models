@@ -439,9 +439,8 @@ The superstep braces \emph{in the upper part of the schema} reflect the critical
   \item \textbf{Receive and merge rounds}: from the end of the last local sort to the end of the final merge on rank 0.
 \end{itemize}
 
-
 \subsection{Asymptotic analysis of the computations}
-I now write node aware expressions that capture scaling in \(N\) and \(P\).
+After defining the supersteps along the critical path, I now approximate the cost asymptotically to capture how the program scales with the number of records \(N\) and the number of nodes \(P\).
 
 \paragraph{Read and send.}
 Rank 0 reads the file and sends index chunks with nonblocking point-to-point calls (\texttt{MPI\_Isend}). Sends are issued sequentially, so the cumulative send time is proportional to \(I\). Reading and sending overlap partially, so I model the stage as
@@ -490,11 +489,15 @@ T_{\text{write}}.
 \]
 
 \subsection{Observations}
+From these expressions I draw the following practical implications:
 \begin{itemize}
+  \item The dominant computational term is \(c_s\,(N/P)\log_2(N/P)\), the dominant communication term is \(\bigl(c_m N + I/B_{\text{net}}\bigr)\log_2 P\), and the I/O terms are linear in \(F\).
   \item Increasing \(P\) reduces the local sorting cost \(c_s\,(N/P)\log_2(N/P)\), which favors large \(P\) when single node sorting is the bottleneck.
   \item Communication and the number of merge rounds grow with \(\log_2 P\). When the network is slow or per round merges are expensive, small \(P\) is preferable.
-  \item The tradeoff above matches the measurements: with few threads per node I gain by distributing across nodes, while with many threads per node communication dominates and adding nodes hurts.
-  \item Thanks to the \texttt{IndexRec} vector, computation and communication terms are independent of the payload size and scale as \(N\log N\) in \(N\) and as \(\log P\) in \(P\). The disk bound read and write terms are linear in \(N\) but proportional to the file size \(F\), which grows with the maximum payload, so I/O is sensitive to \(\text{payload}_{\max}\).
+  \item Thanks to the \texttt{IndexRec} vector, computation and communication terms are independent of the payload size and scale as \(N\log N\) in \(N\) and as \(\log P\) in \(P\).
+  \item The disk bound read and write terms are linear in \(N\) but proportional to the file size \(F\), which grows with the maximum payload, so I/O is sensitive to \(\text{payload}_{\max}\).
 \end{itemize}
+
+Overall, the model predicts a clear tradeoff: when per node sorting is slow relative to the interconnect, increasing \(P\) helps, but when communication is slower or dominates, adding nodes hurts; this aligns with my measurements, where few threads per node benefit from distribution while many threads per node see communication bound slowdowns in the plots of Section~5.
 
 \end{document}
