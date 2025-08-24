@@ -376,9 +376,6 @@ I use the following symbols and assumptions.
 All times reported in plots exclude the rewrite phase, but I keep a write term in the model for completeness.
 
 \subsection{BSP representation of the program}
-The program proceeds through logical stages that suggest a BSP like view: rank 0 reads and builds the index while scattering slices, all ranks sort locally, ranks participate in \(\lceil \log_2 P\rceil\) merge rounds, then rank 0 rewrites the output. The figure is schematic and highlights the critical path.
-
-\subsection{BSP representation of the program}
 The stages are: read and build the global index on rank 0, send index chunks with asynchronous \texttt{Isend}, local sorts on all ranks, receive-and-merge rounds, then the final write on rank 0. For clarity I illustrate \(P=4\).
 
 \begin{figure}[H]
@@ -446,10 +443,10 @@ The superstep braces \emph{in the upper part of the schema} reflect the critical
 \subsection{Asymptotic analysis of the computations}
 I now write node aware expressions that capture scaling in \(N\) and \(P\).
 
-\paragraph{Read and scatter.}
-Rank 0 reads the file and scatters the index. Sends are posted sequentially, so the scatter time is proportional to \(I\). Reading and scattering overlap only partially, so I model the stage as
+\paragraph{Read and send.}
+Rank 0 reads the file and sends index chunks with nonblocking point-to-point calls (\texttt{MPI\_Isend}). Sends are issued sequentially, so the cumulative send time is proportional to \(I\). Reading and sending overlap partially, so I model the stage as
 \[
-T_{\text{read+scatter}}(P)
+T_{\text{read+send}}(P)
 \;=\;
 \max\!\left\{\frac{F}{B_{\text{read}}},\ \frac{I}{B_{\text{net}}}\right\}.
 \]
@@ -483,7 +480,7 @@ The total predicted time is
 \[
 T_{\text{total}}(P)
 \;=\;
-T_{\text{read+scatter}}(P)
+T_{\text{read+send}}(P)
 \;+\;
 T_{\text{sort}}(P)
 \;+\;
