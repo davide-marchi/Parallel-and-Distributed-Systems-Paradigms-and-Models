@@ -378,47 +378,54 @@ All times reported in plots exclude the rewrite phase, but I keep a write term i
 \subsection{BSP representation of the program}
 The program proceeds through logical stages that suggest a BSP like view: rank 0 reads and builds the index while scattering slices, all ranks sort locally, ranks participate in \(\lceil \log_2 P\rceil\) merge rounds, then rank 0 rewrites the output. The figure is schematic and highlights the critical path.
 
+\subsection{BSP representation of the program}
+The stages are: read and build the global index on rank 0, send index chunks with asynchronous \texttt{Isend}, local sorts on all ranks, receive-and-merge rounds, then the final write on rank 0. For clarity I illustrate \(P=4\).
+
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[x=1.05cm,y=0.9cm,>=Stealth,
-    stage/.style={draw,rounded corners,minimum height=6mm,inner xsep=6pt,fill=gray!10},
-    arrow/.style={-Stealth,thick}]
-    % Lanes
-    \node[anchor=west] at (-0.2,0) {\small Rank 0};
-    \node[anchor=west] at (-0.2,-2) {\small Ranks \(1..P{-}1\)};
+  \begin{tikzpicture}[
+    x=0.95cm,y=1.0cm,>=Stealth,
+    lane/.style={},
+    stage/.style={draw,rounded corners,minimum height=6mm,inner xsep=6pt,fill=gray!10,font=\scriptsize},
+    brace/.style={decorate,decoration={brace,amplitude=5pt}},
+  ]
 
-    % Rank 0 stages
-    \node[stage] (r0read) at (1,0) {\small Read + build index};
-    \node[stage] (r0scat) at (3,0) {\small Scatter index slices};
-    \node[stage] (r0sort) at (5,0) {\small Local sort};
-    \node[stage] (r0merge) at (7,0) {\small Merge rounds};
-    \node[stage] (r0write) at (9,0) {\small Rewrite output};
+    % ---- lanes labels
+    \node[anchor=east] at (-0.4,0)    {\small Rank 0};
+    \node[anchor=east] at (-0.4,-1.2) {\small Rank 1};
+    \node[anchor=east] at (-0.4,-2.4) {\small Rank 2};
+    \node[anchor=east] at (-0.4,-3.6) {\small Rank 3};
 
-    % Other ranks stages
-    \node[stage] (rxrecv) at (3,-2) {\small Receive slice};
-    \node[stage] (rxsort) at (5,-2) {\small Local sort};
-    \node[stage] (rxmerge) at (7,-2) {\small Merge rounds};
+    % ---- Rank 0: overlap read (upper) and send (lower)
+    \node[stage,minimum width=3.0cm] (r0_read) at (1.9, 0.35) {Read + build index};
+    \node[stage,minimum width=2.2cm] (r0_sort) at (4.8, 0.35) {Local sort};
+    \node[stage,minimum width=3.0cm] (r0_send) at (2.6,-0.35) {Send index chunks};
 
-    % Arrows rank 0
-    \draw[arrow] (r0read) -- (r0scat);
-    \draw[arrow] (r0scat) -- (r0sort);
-    \draw[arrow] (r0sort) -- (r0merge);
-    \draw[arrow] (r0merge) -- (r0write);
+    % ---- Local sorts: staggered starts (R1 earliest -> R0 latest)
+    \node[stage,minimum width=2.2cm] (r1_sort) at (3.6,-1.2) {Local sort};
+    \node[stage,minimum width=2.2cm] (r2_sort) at (4.6,-2.4) {Local sort};
+    \node[stage,minimum width=2.2cm] (r3_sort) at (5.6,-3.6) {Local sort};
 
-    % Cross-lane arrows
-    \draw[arrow] (r0scat.south) -- ++(0,-0.6) -| (rxrecv.north);
-    \draw[arrow] (rxrecv) -- (rxsort);
-    \draw[arrow] (rxsort) -- (rxmerge);
-    \draw[arrow] (rxmerge.north) -- ++(0,0.6) -| (r0merge.south);
+    % ---- Receive-and-merge: first round on ranks 0 and 2 only
+    \node[stage,minimum width=2.0cm] (r0_merge1) at (7.3, 0.0) {Rec. + merge};
+    \node[stage,minimum width=2.0cm] (r2_merge1) at (8.1,-2.4) {Rec. + merge};
 
-    % Labels for superstep intuition
-    \node at (1,1) {\scriptsize S0};
-    \node at (3,1) {\scriptsize S1};
-    \node at (5,1) {\scriptsize S2};
-    \node at (7,1) {\scriptsize S3};
-    \node at (9,1) {\scriptsize S4};
+    % ---- Final round on rank 0 only
+    \node[stage,minimum width=2.0cm] (r0_merge2) at (10.5,0.0) {Rec. + merge};
+
+    % ---- Final write on rank 0
+    \node[stage,minimum width=2.0cm] (r0_write)  at (12.9,0.0) {Write output};
+
+    % ---- Superstep braces (no S0/S1 labels, only named phases)
+    % Boundaries chosen to cover the visual extents
+    \draw[brace] (0.2,1.0) -- node[above=6pt]{\small Read + Send} (4.3,1.0);
+    \draw[brace] (4.3,1.0) -- node[above=6pt]{\small Local sort} (6.8,1.0);
+    \draw[brace] (6.8,1.0) -- node[above=6pt]{\small Receive and merge rounds} (11.7,1.0);
+    \draw[brace] (11.7,1.0) -- node[above=6pt]{\small Final write} (14.0,1.0);
+
+    % (Arrows intentionally omitted for simplicity)
   \end{tikzpicture}
-  \caption{BSP like sketch of the distributed pipeline and its critical exchanges.}
+  \caption{BSP like sketch with one row per rank (example with \(P=4\)). Rank 0 overlaps reading and sending; local sorts start earlier on ranks 0, 1, and 2 than on rank 3; the first receive-and-merge round runs only on ranks 0 and 2, then the final round runs only on rank 0, followed by the final write.}
   \label{fig:bsp-sketch}
 \end{figure}
 
