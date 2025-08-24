@@ -1,3 +1,14 @@
+- Add a note explaining why the top-down approach is better:
+    - True log2n depth
+    - perfectly balanced merges every time
+    - No barriers between layers
+    - for both ff and omp: you dont have to calulate with which other section of the array you have to merge  the part you just ordered (the task on the upper layer already exists!)
+    - Cons: you have a bit extra overhead to build the tree in advance
+    - Pro: we can overlap it with the reading phase! so its worth it
+
+
+---
+
 - Ha senso calcolare speedup su tutto il tempo totale e dovrei ignorare la scrittura del file? Non sembrerebbe, rewrite time troppo variabile
 
 ----

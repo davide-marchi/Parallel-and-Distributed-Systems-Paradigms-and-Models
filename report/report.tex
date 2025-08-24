@@ -14,6 +14,11 @@
 \usepackage{float}
 \usepackage[hidelinks]{hyperref}
 
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric}
+\usetikzlibrary{decorations.pathreplacing}
+
+
 \usepackage{titling} % for \pretitle, \posttitle, etc.
 \newcommand{\HRule}{\rule{\linewidth}{0.6pt}}
 
@@ -348,5 +353,67 @@ The results show the following trends.
   \item \textbf{Communication-bound crossover.} As on-node sorting speeds up, the fraction of time spent in communication grows. Message startup and bandwidth transfer for sending and receiving index segments dominate, so the execution becomes communication bound.
   \item \textbf{Pairwise merge underutilization.} The pairwise merge schedule inherently halves the number of active ranks each round, which leaves increasing fractions of the cluster idle during merging as \(P\) grows. This structural underutilization is visible as a decreasing efficiency with more nodes in the strong and weak scaling plots.
 \end{itemize}
+
+% =========================================================
+\section{Approximate cost model}
+
+I first present a brief asymptotic analysis that is independent of the number of nodes in order to understand how the total cost scales as a function of the number of records \(N\). This yields compact expressions for the dominant terms and clarifies which components grow like \(N\log N\) versus \(N\).
+After that high level view, I plan to refine the estimate with a BSP like diagram to reason about the critical path and overlap across stages, producing a more precise, node dependent cost model.
+
+\subsection{Variables and assumptions}
+I introduce the following symbols and assumptions. This section focuses on asymptotic behavior with respect to the number of records \(N\) and is intentionally independent of the number of nodes.
+
+\begin{itemize}
+  \item \(N\): number of records.
+  \item \(F\): input file size in bytes. It depends on keys and payloads.
+  \item \(s_I\): size in bytes of one \texttt{IndexRec} entry \(\{\texttt{key},\texttt{pos},\texttt{len}\}\). It is a constant on a given platform.
+  \item \(I = N \cdot s_I\): total size in bytes of the in memory index array.
+  \item \(B_{\text{read}}\), \(B_{\text{write}}\): effective disk read and write bandwidths.
+  \item \(B_{\text{net}}\): effective network bandwidth seen by a process for index transfers.
+  \item \(c_s\): constant factor for local comparison based sorting cost so that the cost of sorting \(N\) keys is \(c_s N\log N\).
+  \item \(c_m\): constant factor for linear merges so that merging two runs of total length \(N\) costs \(c_m N\).
+\end{itemize}
+
+All times above are exclude the rewrite phase in the plots, but I keep a write term in the model for completeness.
+
+\subsection{Asymptotic behavior of the costs}
+\paragraph{Read and initial send.}
+I read the unsorted file and build the index, then distribute index slices. A simple bandwidth model gives
+\[
+T_{\text{read+send}} \;=\; \frac{F}{B_{\text{read}}} \;+\; \frac{I}{B_{\text{net}}} \, .
+\]
+
+\paragraph{Overlap note.}
+Reading and sending overlap only partially. The first send cannot start before the required content has been read, and the last send cannot begin before the last element has been read. Therefore neither activity fully hides the other; at most there is partial overlap that depends on the number of nodes. This partial overlap is irrelevant for the asymptotic analysis in \(N\), so I keep both terms explicit.
+
+\paragraph{Sorting, merging, collecting.}
+I model local sorting plus multi round merging and collection as
+\[
+T_{\text{sort+merge+collect}} \;=\; \underbrace{c_s\,N\log N}_{\text{local sort}}
+\;+\;
+\underbrace{\bigl(c_m\,N + \frac{I}{B_{\text{net}}}\bigr)\cdot \log_2 N}_{\text{multi round merges + transfers}} \, .
+\]
+The initial send is accounted for in \(T_{\text{read+send}}\). Each merge round is linear in \(N\), and I include a per round transfer term using the index size \(I\). The number of rounds is treated as \(O(\log N)\) in this asymptotic view.
+
+\paragraph{Final write.}
+The output file is written once, streamed from the unsorted mapping using the sorted index:
+\[
+T_{\text{write}} \;=\; \frac{F}{B_{\text{read}}}+\frac{F}{B_{\text{write}}} \, .
+\]
+
+\paragraph{Total.}
+The overall cost is the sum of the three components:
+\[
+T_{\text{total}} \;=\; T_{\text{read+send}} \;+\; T_{\text{sort+merge+collect}} \;+\; T_{\text{write}} \, .
+\]
+
+\subsection{Asymptotic observations}
+\begin{itemize}
+  \item Both computation and communication contain \(N\log N\) growth: the local sort scales as \(c_s N\log N\), and the multi round merging plus transfers contributes \(\bigl(c_m N + I/B_{\text{net}}\bigr)\log_2 N\). This means that, independently of \(N\), if either computation or communication is significantly more efficient than the other (for example, few threads per node versus many threads per node), either one can become the bottleneck.
+  \item Thanks to the \texttt{IndexRec} vector, both the computation and communication terms scale as \(N\log N\) and are independent of the payload size, whereas the disk bound read/write terms scale linearly with \(N\) but are proportional to the file size \(F\). Since \(F\) grows with the maximum payload, these I/O terms are sensitive to \(\text{payload}_{\max}\).
+\end{itemize}
+
+\subsection{Toward a BSP critical path refinement}
+To refine the estimate and identify the true bottleneck, I plan to draw a BSP style diagram that lays out the read, send, local sort, merge rounds, and final write as supersteps. From that diagram I can reason about the critical path and possible overlaps. I leave this refinement for later and keep the asymptotic model above as a compact first order view in \(N\).
 
 \end{document}
