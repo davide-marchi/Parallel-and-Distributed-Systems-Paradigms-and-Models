@@ -425,9 +425,23 @@ The stages are: read and build the global index on rank 0, send index chunks wit
 
     % (Arrows intentionally omitted for simplicity)
   \end{tikzpicture}
-  \caption{BSP like sketch with one row per rank (example with \(P=4\)). Rank 0 overlaps reading and sending; local sorts start earlier on ranks 0, 1, and 2 than on rank 3; the first receive-and-merge round runs only on ranks 0 and 2, then the final round runs only on rank 0, followed by the final write.}
+  \caption{BSP like sketch with \(P=4\). Communication dependencies and timing are not shown with arrows; they are accounted for inside the blocks that perform them.}
   \label{fig:bsp-sketch}
 \end{figure}
+
+As the sketch suggests, there are few explicit global barriers. The code encourages overlap and avoids unnecessary waiting:
+\begin{enumerate}
+  \item Ranks 0, 1, and 2 start their local sorts before rank 3, which is the last one to receive its slice to order.
+  \item Pairwise receive and merge steps start as soon as both partner ranks are ready, independently of the other nodes.
+\end{enumerate}
+
+The superstep braces \emph{in the upper part of the schema} reflect the critical path and their timing windows:
+\begin{itemize}
+  \item \textbf{Read + send}: from the start of the read to the end of the last \texttt{Isend}.
+  \item \textbf{Local sort}: from the moment when the last rank begins sorting to the moment when the slowest rank finishes sorting.
+  \item \textbf{Receive and merge rounds}: from the end of the last local sort to the end of the final merge on rank 0.
+\end{itemize}
+
 
 \subsection{Asymptotic analysis of the computations}
 I now write node aware expressions that capture scaling in \(N\) and \(P\).
