@@ -308,15 +308,15 @@ Absolute speedup compares MPI performance to the best sequential baseline on the
 \[
 S_{\text{abs}}(P,t) \;=\; \frac{T_{\text{seq}}^{\ast}(N)}{T_{\text{mpi}}(P,t,N)} \, ,
 \]
-where \(P\) is nodes, \(t\) is threads per node, and \(T_{\text{seq}}^{\ast}(N)\) is the fastest observed sequential time at size \(N\). I also report absolute efficiency that normalizes by the number of nodes:
+where \(P\) is nodes, \(t\) is threads per node, and \(T_{\text{seq}}^{\ast}(N)\) is the fastest observed sequential time at size \(N\). I also report \emph{node efficiency}, normalized by the number of nodes:
 \[
-E_{\text{abs}}(P,t) \;=\; \frac{S_{\text{abs}}(P,t)}{P} \, .
+E_{\text{node}}(P,t) \;=\; \frac{S_{\text{abs}}(P,t)}{P} \, .
 \]
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{imgs/mpi_abs_fixedN_time_speedup_efficiency.png}
-  \caption{Fixed \(N\) and \(\text{payload}_{\max}=32\): time \(T\), absolute speedup \(S_{\text{abs}}\), and absolute efficiency \(E_{\text{abs}}\) versus nodes. Lines are threads per node.}
+  \caption{Fixed \(N\) and \(\text{payload}_{\max}=32\): time \(T\), absolute speedup \(S_{\text{abs}}\), and node efficiency \(E_{\text{node}}\) versus nodes. Lines are threads per node.}
   \label{fig:mpi-abs-fixedN}
 \end{figure}
 
