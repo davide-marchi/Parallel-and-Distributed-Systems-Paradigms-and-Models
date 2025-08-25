@@ -190,7 +190,7 @@ I implement a task based top down mergesort over the \texttt{IndexRec} vector wh
 
 \subsection{Performance evaluation}
 
-I evaluate index build plus sort time for the sequential, FastFlow, and OpenMP implementations over multiple input sizes, payload maxima, and thread counts. For each configuration I aggregate repeated runs and report medians.
+I evaluate index build plus sort time for the sequential, FastFlow, and OpenMP implementations over multiple input sizes, payload maxima, and thread counts.
 
 \subsubsection{Execution times}
 I report the total time
@@ -268,7 +268,7 @@ The measurements support the following points.
 
 \begin{itemize}
   \item \textbf{OpenMP with one thread.} The OpenMP version with a single thread is much slower than the sequential baseline. In this case I enforce a \texttt{taskwait} to ensure the reading task finishes before merging begins, which completely removes any overlap between reading and merging and likely contributes to the slowdown.
-  \item \textbf{FastFlow with two threads.} With exactly two threads, one acts as emitter and only one remains as a worker, so this specific case cannot beat the sequential baseline. For three or more threads, the FastFlow version outperforms the sequential baseline.
+  \item \textbf{FastFlow with two threads.} With exactly two threads, one acts as emitter and only one remains as a worker, so this specific case cannot beat the sequential baseline. For four or more threads, the FastFlow version outperforms the sequential baseline.
   \item \textbf{Scaling with threads.} As I increase threads, both OpenMP and FastFlow outperform the sequential version. OpenMP is slightly better than FastFlow at higher thread counts due to lower runtime overheads.
   \item \textbf{Effect of problem size and payload.} Speedup grows with the number of elements and shrinks with larger payloads. Larger \(N\) increases the compute share in sorting, while larger payloads increase page faults and time spent building the index relative to sorting.
   \item \textbf{Memory bound cases.} With few elements and large payloads the execution tends to be memory bound. During index build, I use \texttt{mmap}, so reading one record faults in a whole page. Larger payloads reduce the number of keys per page, which increases the number of pages that need to be fetched and slows the index build.
