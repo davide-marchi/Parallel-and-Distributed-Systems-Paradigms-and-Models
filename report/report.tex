@@ -464,7 +464,7 @@ c_s\,\frac{N}{P}\,\log_2\!\left(\frac{N}{P}\right).
 \]
 
 \paragraph{Multi round merges and transfers.}
-Pairwise merging proceeds in \(\lceil\log_2 P\rceil\) rounds. Each round performs a linear merge of total length \(N\) along the critical path, plus transfers of index segments. Ignoring the shrinking message sizes in later rounds gives an upper bound
+Pairwise merging proceeds in \(\lceil\log_2 P\rceil\) rounds. Along the critical path, both the merged run length and the message size grow across rounds \((\approx N/P,\, 2N/P,\, \ldots,\, N/2,\, N)\), culminating in an \(O(N)\) merge in the final round. Bounding every round by this worst-case \(O(N)\) merge \emph{and} by the worst-case per-round transfer yields the conservative estimate
 \[
 T_{\text{merge+collect}}(P)
 \;=\;
