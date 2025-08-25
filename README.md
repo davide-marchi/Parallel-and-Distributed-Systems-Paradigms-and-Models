@@ -1,4 +1,4 @@
-# Parallel and Distributed Systems — Project 1 (MergeSort)
+# Parallel and Distributed Systems - Project 1 (MergeSort)
 
 Distributed out-of-core MergeSort in C++17 using `mmap`. The project implements a common I/O pipeline (index build → index sort → rewrite) across:
 - **Sequential** (baseline)
@@ -14,18 +14,20 @@ The repo includes runnable scripts for experiments, a Jupyter notebook for plott
 
 ```
 .
-├── analysis/                    # Notebook for plots/analysis
-│   └── seq_omp_ff_composites.ipynb
-├── report/                      # Compiled report
-│   └── report.pdf
-├── scripts/                     # Helper scripts for sweeps
-│   ├── run_array_any.sh         # Single-node: seq / omp / ff
-│   └── run_array_mpi.sh         # Multi-node: MPI+OMP
-├── results/                     # CSV output (created at run time)
-├── logs/                        # Logs from runs (created at run time)
-├── imgs/                        # Plots saved by the notebook (created at run time)
-├── ff/                          # CPU mapping helper for FastFlow
-│   └── mapping_string.sh
+├── analysis/                       
+│   ├── seq_omp_ff_composites.ipynb # Notebook for plots/analysis
+│   └── plots_seq_omp_ff/           # Plots saved by the notebook
+├── report/
+│   ├── report.pdf                  # Compiled report
+│   └── imgs/                       # Images used in the report
+├── scripts/                        # Helper scripts for sweeps
+│   ├── run_array_any.sh            # Single-node: seq / omp / ff
+│   └── run_array_mpi.sh            # Multi-node: MPI+OMP
+├── results/                        # CSV output (created at run time)
+├── logs/                           # Logs from runs (created at run time)
+├── fastflow/
+│   └── ff/                         # FastFlow
+│       └── mapping_string.sh
 ├── bin/                         # Executables (created by make)
 ├── Makefile
 ├── utils.hpp
