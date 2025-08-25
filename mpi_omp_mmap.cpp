@@ -78,20 +78,14 @@ static void pairwise_merge_tree(std::vector<IndexRec>& local_sorted_index,
     std::vector<IndexRec> partner_buf;
     std::vector<IndexRec> concat;
 
-    // Iterate merge rounds where the stride doubles each time
-    // 1 << round computes 2^round as the current stride
-    // Partner for this rank is rank XOR stride
-    // Stop when stride reaches world_size
-    // If partner exceeds world_size we skip that pair
-    // Example P=8 -> r=0 stride=1: 0-1 2-3 4-5 6-7
-    // Example P=8 -> r=1 stride=2: 0-2 1-3 4-6 5-7
-    // Example P=8 -> r=2 stride=4: 0-4 1-5 2-6 3-7
+    // Pairwise reduction tree: at round r, partner = rank ^ (1<<r).
+    // Skip partners >= world_size. (P=8: r0->(0,1)(2,3)(4,5)(6,7); r1->(0,2)(1,3)(4,6)(5,7); r2->(0,4)(1,5)(2,6)(3,7))
     for (int round = 0; (1 << round) < world_size; ++round) {
 
         // Pick partner by flipping the bit for this round
         // ^ is bitwise XOR and (1 << round) selects the bit to flip
         // Example rank 5 (101b): r0 stride 1 -> 5^1=4 (100b), r1 stride 2 -> 5^2=7 (111b), r2 stride 4 -> 5^4=1 (001b)
-        // Works like a hypercube edge per round; skip if partner >= world_size
+        // skip if partner >= world_size
         const int partner = world_rank ^ (1 << round);
         if (partner >= world_size) continue;
 
