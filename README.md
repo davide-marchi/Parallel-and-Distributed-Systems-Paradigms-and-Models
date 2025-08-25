@@ -55,7 +55,7 @@ git clone https://github.com/fastflow/fastflow.git fastflow
 ```
 Before using the FastFlow executable, run the CPU mapping helper:
 ```bash
-bash ff/mapping_string.sh
+bash fastflow/ff/mapping_string.sh
 ```
 It prints a mapping string and guidance you can apply to match your machine topology.
 
@@ -83,10 +83,10 @@ All binaries print help with `-h`. Example:
 ```
 bin/omp_mmap -h
 Usage: bin/omp_mmap [options]
-  -n, --records N      number of records (default 1e6)
-  -p, --payload B      maximum payload size in bytes (default 256)
-  -t, --threads T      threads to use (0 = hw concurrency)
-  -c, --cutoff  N      task cutoff size    (default 10000)
+  -n, --records N      number of records              (default 1e6)
+  -p, --payload B      maximum payload size in bytes  (default 256)
+  -t, --threads T      threads to use                 (0 = hw concurrency)
+  -c, --cutoff  N      task cutoff size               (default 10000)
   -h, --help           show this help
 ```
 (The same flags apply to the other executables. For the MPI+OMP binary, `-t` selects **threads per rank**.)
@@ -139,4 +139,4 @@ Each script defines default grids for records, payloads, threads, and trials. Ov
 
 ## Plots and analysis
 
-The plotting notebook is at `analysis/seq_omp_ff_composites.ipynb`. At the top, a boolean variable toggles whether to include write-time in the figures. Running the notebook saves composite figures under `imgs/`.
+The plotting notebook is at `analysis/seq_omp_ff_composites.ipynb`. At the top, a boolean variable toggles whether to include write-time in the figures. Running the notebook saves composite figures under `analysis/plots_seq_omp_ff/`.
