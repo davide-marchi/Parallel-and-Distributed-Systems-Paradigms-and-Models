@@ -92,15 +92,15 @@ The input is a large binary file that stores an array of records. Each record co
 
 I use the following logical layout for each \textbf{Record}:
 \begin{itemize}
-  \item \textbf{key}: 64 bit unsigned long used for ordering;
+  \item \textbf{key}: 64 bit unsigned integer used for ordering;
   \item \textbf{len}: 32 bit unsigned integer that gives the payload length in bytes, with \(\text{len} \le P\) for a dataset parameter \(P\);
   \item \textbf{payload}: a byte array of length \(\text{len}\).
 \end{itemize}
 
 Sorting records in place is impractical when the file is larger than RAM. Instead, I construct an auxiliary in memory index. Each entry is an \textbf{IndexRec} that stores only what is needed to order and later locate the record:
 \begin{itemize}
-  \item \textbf{key}: 64 bit unsigned long, copied from the record;
-  \item \textbf{offset}: byte offset in the unsorted file where the record begins;
+  \item \textbf{key}: 64 bit unsigned integer, copied from the record;
+  \item \textbf{offset}: 64 bit unsigned integer, the byte offset where the record begins in the unsorted file;
   \item \textbf{len}: 32 bit unsigned integer, copied from the record, used to stream the right number of bytes during rewrite.
 \end{itemize}
 The index has length \(N\), one entry per record. Its memory footprint is \(O(N)\) and is independent of the maximum payload size \(P\). This design keeps memory predictable and minimizes disk traffic during random access.
