@@ -362,7 +362,7 @@ The results show the following trends.
 % =========================================================
 \section{Approximate cost model}
 
-This section proceeds in four parts. First, I define the variables and assumptions. Second, I present a BSP like, row-by-row sketch of the distributed pipeline to make the supersteps explicit. Third, I derive asymptotic formulas for the cost of each superstep as functions of the number of records \(N\) and the number of nodes \(P\). Finally, I summarize the main observations that connect the model with the measurements.
+This section proceeds in four parts. First, I define the variables and assumptions. Second, I present a BSP like, row-by-row sketch of the distributed pipeline to make the supersteps of the critical path explicit. Third, I derive asymptotic formulas for the cost of each superstep as functions of the number of records \(N\) and the number of nodes \(P\). Finally, I summarize the main observations that connect the model with the measurements.
 
 \subsection{Variables and assumptions}
 I use the following symbols and assumptions.
@@ -431,10 +431,10 @@ The stages are: read and build the global index on rank 0, send index chunks wit
   \label{fig:bsp-sketch}
 \end{figure}
 
-As the sketch suggests, there are few explicit global barriers. The code encourages overlap and avoids unnecessary waiting:
+As the sketch suggests, there are no explicit global synchronization barriers across ranks; progress is driven by point-to-point readiness and pairwise merges, with only data-dependency waits and the final completion on rank~0. The code encourages overlap and avoids unnecessary waiting:
 \begin{enumerate}
   \item Ranks 0, 1, and 2 start their local sorts before rank 3, which is the last one to receive its slice to order.
-  \item Pairwise receive and merge steps start as soon as both partner ranks are ready, independently of the other nodes.
+  \item Receive-and-merge steps start as soon as both partner ranks are ready, independently of the other nodes.
 \end{enumerate}
 
 The superstep braces \emph{in the upper part of the schema} reflect the critical path and their timing windows:
