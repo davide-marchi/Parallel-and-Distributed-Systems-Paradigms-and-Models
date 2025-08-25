@@ -27,4 +27,4 @@ report/*.synctex.gz
 report/*.toc
 
 # Experiments
-experiments/*
+experiments/
