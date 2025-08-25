@@ -4,15 +4,15 @@
 #
 # ONE script to launch a single Slurm job array for ANY of your executables:
 #   --bin bin/sequential_seq_mmap
-#   --bin bin/openmp_seq_mmap
-#   --bin bin/fastflow_seq_mmap
+#   --bin bin/omp_mmap
+#   --bin bin/ff_mmap
 #
 # It sweeps TRIALS × RECORDS × PAYLOAD_MAX × CUTOFFS × THREADS and appends
 # a row per task into results/<binary>.csv (with file locking).
 #
 # Examples:
 #   ./scripts/run_array_any.sh --bin bin/sequential_seq_mmap
-#   ./scripts/run_array_any.sh --bin bin/openmp_seq_mmap --max-parallel 4
+#   ./scripts/run_array_any.sh --bin bin/omp_mmap --max-parallel 4
 #
 # Logging:
 #   Single log per array: logs/<binary>_%A.out and logs/<binary>_%A.err

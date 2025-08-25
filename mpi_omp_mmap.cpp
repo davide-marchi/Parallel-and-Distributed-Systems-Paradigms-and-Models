@@ -1,8 +1,8 @@
 // MPI Pairwise-tree mergesort with one-shot index sends
 // Local sort uses OpenMP tasks on IndexRec
 // One send and one recv per rank using deterministic slice sizes
-// Locally with mpirun -np 4 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
-// On Slurm with srun --mpi=pmix -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_pairwise_tree -n 10000000 -p 8 -t 8 -c 10000
+// Locally with mpirun -np 4 ./bin/mpi_omp_mmap -n 10000000 -p 8 -t 8 -c 10000
+// On Slurm with srun --mpi=pmix -N 4 -n 4 --cpus-per-task=8 ./bin/mpi_omp_mmap -n 10000000 -p 8 -t 8 -c 10000
 
 
 #include "utils.hpp"

@@ -10,7 +10,6 @@
 #
 # USAGE
 #   bash scripts/run_array_mpi.sh --bin bin/mpi_omp_mmap
-#   bash scripts/run_array_mpi.sh --bin bin/mpi_omp_seq_mmap --max-parallel 2
 #
 # LOGGING
 #   Single .out/.err per array (per NODES value): logs/<bin>_N<NODES>_%A.out / .err (append).

@@ -1,7 +1,7 @@
 # Parallel and Distributed Systems - Project 1 (MergeSort)
 *Davide Marchi - August 2025*
 
-Distributed out-of-core MergeSort in C++17 using `mmap`. The project implements a common I/O pipeline (index build → index sort → rewrite) across:
+Distributed out-of-core MergeSort in C++20 using `mmap`. The project implements a common I/O pipeline (index build → index sort → rewrite) across:
 - **Sequential** (baseline)
 - **OpenMP** (task-based mergesort)
 - **FastFlow** (farm: emitter + workers)
@@ -44,7 +44,7 @@ The repo includes runnable scripts for experiments, a Jupyter notebook for plott
 ## Build
 
 ### Requirements
-- GCC or Clang with C++17 and OpenMP
+- GCC or Clang with C++20 and OpenMP
 - MPI toolchain (Open MPI or MPICH) for the MPI target
 - Linux with `mmap`
 - FastFlow headers (cloned locally as shown below)
@@ -130,10 +130,10 @@ Run the sweep scripts with just the binary path; outputs go to `results/` and lo
 
 ```bash
 # Single-node sweeps (seq / omp / ff)
-bash scripts/run_array_any.sh -bin bin/omp_mmap
+bash scripts/run_array_any.sh --bin bin/omp_mmap
 
 # Multi-node sweeps (MPI + OMP)
-bash scripts/run_array_mpi.sh -bin bin/mpi_omp_mmap
+bash scripts/run_array_mpi.sh --bin bin/mpi_omp_mmap
 ```
 Each script defines default grids for records, payloads, threads, and trials. Override them by passing the appropriate flags/environment variables (see the script header).
 
