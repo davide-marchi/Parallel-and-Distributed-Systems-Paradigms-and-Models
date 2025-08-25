@@ -354,7 +354,7 @@ The results show the following trends.
 
 \begin{itemize}
   \item \textbf{Few threads per node.} With one or a few threads per node I gain by distributing across nodes. Communication costs are small relative to local sorting time, so adding nodes reduces time meaningfully.
-  \item \textbf{Many threads per node.} As I increase threads per node, local sorting becomes faster and the communication share grows. Beyond a point, spreading work across nodes hurts. For example, with 32 threads per node the communication time outweighs the benefit of splitting work across 8 nodes, making the run communication bound.
+  \item \textbf{Many threads per node.} As threads per node increase, local sorting occupies a smaller fraction of the runtime. Beyond a point, spreading work across nodes hurts; for example, with 32 threads per node the non-compute overheads outweigh the benefit of splitting work across 8 nodes.
   \item \textbf{Communication-bound crossover.} As on-node sorting speeds up, the fraction of time spent in communication grows. Message startup and bandwidth transfer for sending and receiving index segments dominate, so the execution becomes communication bound.
   \item \textbf{Pairwise merge underutilization.} The pairwise merge schedule inherently halves the number of active ranks each round, which leaves increasing fractions of the cluster idle during merging as \(P\) grows. This structural underutilization is visible as a decreasing efficiency with more nodes in the strong and weak scaling plots.
 \end{itemize}
