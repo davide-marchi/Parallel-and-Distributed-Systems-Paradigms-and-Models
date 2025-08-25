@@ -136,7 +136,7 @@ static void pairwise_merge_tree(std::vector<IndexRec>& local_sorted_index,
 // Root (rank 0) scans the file once, fills exactly one vector per rank
 // with that rank’s slice (contiguous by record index). As soon as a slice is
 // complete (we reach its end record), root posts a single MPI_Isend of that
-// vector to that rank. Non-root ranks pre-post a single MPI_Irecv for their
+// vector to that rank. Non-root ranks pre-post a single MPI_Recv for their
 // expected slice size (computed deterministically), then wait for completion.
 // This gives exactly one send/recv pair per rank, and still overlaps a bit
 // because root sends each slice as soon as it finishes scanning it.
@@ -233,7 +233,7 @@ static void root_build_and_send_full_slices(const std::string& input_path,
     BENCH_STOP(reading);
 }
 
-// Non-root: pre-post one Irecv for the full slice and wait for it
+// Non-root: pre-post one Recv for the full slice and wait for it
 static void nonroot_recv_full_slice(int                my_rank,
                                     uint64_t           total_records,
                                     int                world_size,
