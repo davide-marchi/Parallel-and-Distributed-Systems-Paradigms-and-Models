@@ -54,11 +54,12 @@ Clone the official FastFlow repository **in this project directory** so it sits 
 ```bash
 git clone https://github.com/fastflow/fastflow.git fastflow
 ```
-Before using the FastFlow executable, run the CPU mapping helper:
+Run the CPU mapping helper from inside the ff/ subfolder.
+This script directly updates FastFlow’s internal mapping configuration.
 ```bash
-bash fastflow/ff/mapping_string.sh
+cd fastflow/ff
+bash mapping_string.sh
 ```
-It prints a mapping string and guidance you can apply to match your machine topology.
 
 ### Compile
 ```bash
