@@ -118,7 +118,7 @@ The pipeline is the same across all variants:
 
 In the multi node variant, I run one MPI rank per node. A designated rank reads the file and builds the global index, then partitions that index into contiguous slices and sends one slice to each rank. Each rank sorts its slice locally. The globally sorted order is obtained through a sequence of pairwise merges across ranks. The final rank rewrites the output file and performs validation. Communication is limited to index data and merged index segments, which keeps memory usage predictable and decoupled from payload size.
 
-The primary metrics are total time for index build plus sort, speedup \(S_p = T_1 / T_p\), and efficiency \(E_p = S_p / p\). For single node studies, \(p\) is the thread count. For distributed studies, \(p\) is the product of nodes and threads if noted, or the number of threads per rank when speedup is plotted against nodes. Strong scaling holds \(N\) fixed while varying \(p\). Weak scaling grows \(N\) proportionally to \(p\).
+The primary metrics are total time for index build plus sort, speedup \(S_p = T_1 / T_p\), and efficiency \(E_p = S_p / p\). For single node studies, \(p\) is the thread count. For distributed studies, \(p\) denotes the number of nodes; when I vary threads per node, I plot separate curves for each thread count. Strong scaling holds \(N\) fixed while varying \(p\). Weak scaling grows \(N\) proportionally to \(p\).
 
 % =========================================================
 \section{Memory and I/O considerations}
