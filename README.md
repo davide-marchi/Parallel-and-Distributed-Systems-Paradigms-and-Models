@@ -1,57 +1,140 @@
-# Project 2 - SPM course a.a. 24/25  
+# Parallel and Distributed Systems — Project 1 (MergeSort)
 
-### May 15 2025  
+Distributed out-of-core MergeSort in C++17 using `mmap`. The project implements a common I/O pipeline (index build → index sort → rewrite) across:
+- **Sequential** (baseline)
+- **OpenMP** (task-based mergesort)
+- **FastFlow** (farm: emitter + workers)
+- **MPI + OpenMP** (one rank per node; pairwise distributed merges)
 
-## Distributed out-of-core MergeSort  
+The repo includes runnable scripts for experiments, a Jupyter notebook for plotting, and a PDF report. Results and logs are saved to folders so runs are reproducible.
 
-Design and implement a scalable MergeSort for an N-record file where each record can have a different size 
-in the range [8,  PAYLOAD_MAX], where PAYLOAD_MAX is a constant value. A possible C-like representation 
-of one record is as follows:  
+---
 
-```cpp
-struct Record { 
-     unsigned long key;  // sorting value 8-bytes 
-     uint32_t len;       // payload byte length (8 ≤ len ≤ PAYLOAD_MAX) 
-     char payload[];     
-}; 
+## Repository layout
+
+```
+.
+├── analysis/                    # Notebook for plots/analysis
+│   └── seq_omp_ff_composites.ipynb
+├── report/                      # Compiled report
+│   └── report.pdf
+├── scripts/                     # Helper scripts for sweeps
+│   ├── run_array_any.sh         # Single-node: seq / omp / ff
+│   └── run_array_mpi.sh         # Multi-node: MPI+OMP
+├── results/                     # CSV output (created at run time)
+├── logs/                        # Logs from runs (created at run time)
+├── imgs/                        # Plots saved by the notebook (created at run time)
+├── ff/                          # CPU mapping helper for FastFlow
+│   └── mapping_string.sh
+├── bin/                         # Executables (created by make)
+├── Makefile
+├── utils.hpp
+├── sequential_seq_mmap.cpp
+├── omp_mmap.cpp
+├── ff_mmap.cpp
+├── mpi_omp_mmap.cpp
+└── README.md
 ```
 
-The payload is a blob of bytes arbitrarily initialized. The key field of the record is the only comparison field. 
-You should not assume that the file containing the records to sort can be entirely loaded into the memory of 
-one node. Your solution must work even if the file size exceeds the RAM of a node. Consider the maximum 
-available RAM of a node to be 32 GB.  
+---
 
+## Build
 
-## Tasks 
+### Requirements
+- GCC or Clang with C++17 and OpenMP
+- MPI toolchain (Open MPI or MPICH) for the MPI target
+- Linux with `mmap`
+- FastFlow headers (cloned locally as shown below)
 
-1. Single-node versions (shared-memory)  
-Implement two versions, one with FastFlow parallel building blocks (i.e., farm / pipeline/ all-to-all) and 
-one with OpenMP pragmas. Both must produce identical output. Sequential sorting can be implemented 
-leveraging std::sort or equivalent C++ standard library calls. 
+### FastFlow setup
+Clone the official FastFlow repository **in this project directory** so it sits alongside the sources:
+```bash
+git clone https://github.com/fastflow/fastflow.git fastflow
+```
+Before using the FastFlow executable, run the CPU mapping helper:
+```bash
+bash ff/mapping_string.sh
+```
+It prints a mapping string and guidance you can apply to match your machine topology.
 
-2. Multi-node hybrid version  
-Combine MPI + FastFlow or MPI + OpenMP (your choice, but document it) to produce a distributed 
-version of the MergeSort algorithm. Re-use the single-node code inside each MPI rank.  
+### Compile
+```bash
+make                 # builds all targets into ./bin
+```
+Targets produced:
+- `bin/sequential_seq_mmap`
+- `bin/omp_mmap`
+- `bin/ff_mmap`
+- `bin/mpi_omp_mmap`
 
-3. Performance evaluation  
-Analyze the performance of your parallel and distributed solutions by varying the number of records N 
-and the payload size distribution (e.g., by considering large N and small PAYLOAD_MAX and vice versa), 
-and the number of FastFlow/OpenMP threads. Report speedup and efficiency varying the number of 
-threads on a single node, and strong and weak scalability curves on the spmcluster up to 8 nodes by 
-changing the number of MPI processes and the number of threads per process.  
+### Clean
+```bash
+make clean           # remove objects
+make distclean       # also remove ./bin and build artifacts
+```
 
-4. Analysis  
-Provide an approximate cost model of your distributed solution. Summarize bottleneck phases, 
-computation-to-communication overlap effectiveness, challenges encountered, and optimizations you 
-adopted. 
+---
 
-All parallel versions developed should aim to minimize the parallelization overhead. 
+## Command-line parameters
 
+All binaries print help with `-h`. Example:
+```
+bin/omp_mmap -h
+Usage: bin/omp_mmap [options]
+  -n, --records N      number of records (default 1e6)
+  -p, --payload B      maximum payload size in bytes (default 256)
+  -t, --threads T      threads to use (0 = hw concurrency)
+  -c, --cutoff  N      task cutoff size    (default 10000)
+  -h, --help           show this help
+```
+(The same flags apply to the other executables. For the MPI+OMP binary, `-t` selects **threads per rank**.)
 
-## Deliverables 
+---
 
-Provide all source files, scripts to compile and execute your code on the cluster nodes, and a PDF report (max 
-15 pages) describing your implementations and the performance analysis conducted. Mention the challenges 
-encountered and the solutions adopted. Submit by email to massimo.torquati@unipi.it your source code and 
-PDF report in a single zip file named ‘SPM_project2_<YourName>.zip’. Please use the email subject “SPM 
-Project”.
+## Running on Slurm with `srun`
+
+Create output folders once:
+```bash
+mkdir -p results logs
+```
+
+### Single-node examples (`srun -n 1`)
+```bash
+# Sequential baseline
+srun -n 1 bin/sequential_seq_mmap -n 100000000 -p 32
+
+# OpenMP on 16 threads
+srun -n 1 --cpus-per-task=16 bin/omp_mmap -n 100000000 -p 32 -t 16 -c 10000
+
+# FastFlow on 16 threads (1 emitter + 15 workers)
+# Run ff/mapping_string.sh beforehand to get a good CPU mapping.
+srun -n 1 --cpus-per-task=16 bin/ff_mmap -n 100000000 -p 32 -t 16 -c 10000
+```
+
+### Multi-node MPI + OMP (`srun --mpi=pmix`)
+One rank per node (example: 4 nodes, 16 threads per rank):
+```bash
+srun --mpi=pmix -N 4 -n 4 --cpus-per-task=16 bin/mpi_omp_mmap -n 100000000 -p 32 -t 16 -c 10000
+```
+(Alternatively: `-N 4 --ntasks-per-node=1`.)
+
+---
+
+## Scripts for testing
+
+Run the sweep scripts with just the binary path; outputs go to `results/` and logs to `logs/` by default.
+
+```bash
+# Single-node sweeps (seq / omp / ff)
+bash scripts/run_array_any.sh -bin bin/omp_mmap
+
+# Multi-node sweeps (MPI + OMP)
+bash scripts/run_array_mpi.sh -bin bin/mpi_omp_mmap
+```
+Each script defines default grids for records, payloads, threads, and trials. Override them by passing the appropriate flags/environment variables (see the script header).
+
+---
+
+## Plots and analysis
+
+The plotting notebook is at `analysis/seq_omp_ff_composites.ipynb`. At the top, a boolean variable toggles whether to include write-time in the figures. Running the notebook saves composite figures under `imgs/`.
