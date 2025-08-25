@@ -28,7 +28,7 @@ The repo includes runnable scripts for experiments, a Jupyter notebook for plott
 ├── fastflow/
 │   └── ff/                         # FastFlow
 │       └── mapping_string.sh
-├── bin/                         # Executables (created by make)
+├── bin/                            # Executables (created by make)
 ├── Makefile
 ├── utils.hpp
 ├── sequential_seq_mmap.cpp
