@@ -70,7 +70,7 @@ Code repository:
 \section{Introduction}
 I present a complete study of a distributed out-of-core MergeSort. The study proceeds in four steps. First, I describe the problem and the data layout. Second, I implement four solutions that share a common I/O pipeline while differing in how they exploit parallelism: a sequential baseline, an OpenMP task based version, a FastFlow farm based version, and a multi node hybrid MPI solution that reuses the single node core. Third, I evaluate these versions under controlled workloads and hardware configurations, measuring runtime, speedup, and efficiency. Finally, I discuss the results and propose an approximate cost model for the distributed solution.
 
-All implementations work on files that are potentially larger than available RAM. Each program first scans the unsorted file to build an in memory index of keys and positions and lengths, then sorts this index, then rewrites a new file in key order by fetching payloads at the recorded positions. To keep memory usage proportional to the number of records, the in memory structure stores only keys, offsets, and lengths. The write phase can be highly variable on a shared cluster, so the primary performance analysis focuses on the reading and sorting stages. The full pipeline remains functionally correct and the final output is validated.
+All implementations work on files that are potentially larger than available RAM. Each program first scans the unsorted file to build an in memory index of keys, offsets, and lengths, then sorts this index, then rewrites a new file in key order by copying each record from its recorded offset. To keep memory usage proportional to the number of records, the in memory structure stores only keys, offsets, and lengths. The write phase can be highly variable on a shared cluster, so the primary performance analysis focuses on the reading and sorting stages. The full pipeline remains functionally correct and the final output is validated.
 
 The objectives are:
 \begin{itemize}
@@ -100,8 +100,8 @@ I use the following logical layout for each \textbf{Record}:
 Sorting records in place is impractical when the file is larger than RAM. Instead, I construct an auxiliary in memory index. Each entry is an \textbf{IndexRec} that stores only what is needed to order and later locate the record:
 \begin{itemize}
   \item \textbf{key}: 64 bit unsigned integer, copied from the record;
-  \item \textbf{pos}: byte offset in the unsorted file where the record begins;
-  \item \textbf{len}: 32 bit unsigned integer, copied from the record, used to stream exactly \(\text{len}\) bytes during rewrite.
+  \item \textbf{offset}: byte offset in the unsorted file where the record begins;
+  \item \textbf{len}: 32 bit unsigned integer, copied from the record, used to stream the right number of bytes during rewrite.
 \end{itemize}
 The index has length \(N\), one entry per record. Its memory footprint is \(O(N)\) and is independent of the maximum payload size \(P\). This design keeps memory predictable and minimizes disk traffic during random access.
 
@@ -110,9 +110,9 @@ Correctness means that the output file contains exactly the input records in non
 \subsection{Pipeline, distributed setting, and metrics}
 The pipeline is the same across all variants:
 \begin{enumerate}
-  \item \textbf{Index build.} Scan the unsorted file, read \texttt{key} and \texttt{len} per record, and fill the \texttt{IndexRec} array with \{key, pos, len\}. File access uses memory mapping to support efficient random access patterns and to avoid large user space buffers.
+  \item \textbf{Index build.} Scan the unsorted file, read \texttt{key} and \texttt{len} per record, and fill the \texttt{IndexRec} array with \{key, offset, len\}. File access uses memory mapping to support efficient random access patterns and to avoid large user space buffers.
   \item \textbf{Index sort.} Sort the \texttt{IndexRec} array by key. The sequential baseline uses \texttt{std::sort}. The parallel versions use a task based mergesort with a base case threshold that delegates small subarrays to \texttt{std::sort}.
-  \item \textbf{Rewrite.} Create the output file, then for each entry in sorted order fetch the record at \texttt{pos} from the unsorted file and write it to the next position in the output file, streaming exactly \texttt{len} bytes for the payload. This preserves the original payloads without storing them all in memory.
+  \item \textbf{Rewrite.} Create the output file, then for each entry in sorted order fetch the record at \texttt{offset} from the unsorted file and copy the entire record to the output, i.e., \(\texttt{sizeof(key)}+\texttt{sizeof(len)}+\texttt{len}\) bytes, where \texttt{len} specifies the payload size.
   \item \textbf{Validation.} Scan the output file to confirm nondecreasing key order and that the record count is unchanged.
 \end{enumerate}
 
@@ -122,13 +122,13 @@ The primary metrics are total time for index build plus sort, speedup \(S_p = T_
 
 % =========================================================
 \section{Memory and I/O considerations}
-My design keeps memory usage proportional to the number of records rather than to the maximum payload size or to an arbitrary buffer. I maintain an in memory index of length \(N\), where each entry stores only the information required to order and later locate a record: \(\{\texttt{key}, \texttt{pos}, \texttt{len}\}\). The footprint is therefore \(O(N)\) with a small constant factor that depends on the sizes of these fields, and it does not depend on the maximum payload parameter \(P\). During rewrite I stream each payload directly from the unsorted file into the output without caching all payloads in RAM.
+My design keeps memory usage proportional to the number of records rather than to the maximum payload size or to an arbitrary buffer. I maintain an in memory index of length \(N\), where each entry stores only the information required to order and later locate a record: \(\{\texttt{key}, \texttt{offset}, \texttt{len}\}\). The footprint is therefore \(O(N)\) with a small constant factor that depends on the sizes of these fields, and it does not depend on the maximum payload parameter \(P\). During rewrite I stream each entire record directly from the unsorted file into the output without caching all payloads in RAM.
 
 \subsection{Why I use memory mapping}
 I use \texttt{mmap} for both reading and writing. This choice avoids explicit user space I/O buffers and lets the operating system handle paging and readahead. It is well suited to the two access patterns in this project:
 \begin{itemize}
   \item During index build, I scan the file record by record and read only \texttt{key} and \texttt{len}. Mapping the file allows the kernel to fault in pages efficiently and to reuse them across passes when the page cache is warm.
-  \item During rewrite, I must fetch payloads at the original positions and emit them in sorted order. This requires many random reads of the source and a sequential write to the destination. With \texttt{mmap} I can copy exactly \texttt{len} bytes per record from the mapped source region to the mapped destination region without building large staging buffers.
+  \item During rewrite, I must fetch records at the original positions and emit them in sorted order. This requires many random reads of the source and a sequential write to the destination. With \texttt{mmap} I can copy each entire record (header + payload) from the mapped source to the mapped destination without building large staging buffers.
 \end{itemize}
 This approach keeps per record work bounded and predictable, and it aligns with the constraint that the file may be much larger than available RAM.
 
@@ -163,10 +163,10 @@ Given this spread, including rewrite time in the main figures would mask the eff
 % =========================================================
 \section{Single node implementations}
 
-All single node variants share the same three stage pipeline: I first scan the file to build an in memory index of \(\{\texttt{key}, \texttt{pos}, \texttt{len}\}\) entries, then I sort this index, then I rewrite the output file by streaming each payload from the original position to its new position. Using the \texttt{IndexRec} vector keeps memory proportional to the number of records \(N\), independent of the maximum payload size \(P\). For the parallel variants I use a task based mergesort with a base case threshold of 10\,000 elements that falls back to \texttt{std::sort} to avoid unnecessary tasking overhead.
+All single node variants share the same three stage pipeline: I first scan the file to build an in memory index of \(\{\texttt{key}, \texttt{offset}, \texttt{len}\}\) entries, then I sort this index, then I rewrite the output file by copying each record from the original position to its new position. Using the \texttt{IndexRec} vector keeps memory proportional to the number of records \(N\), independent of the maximum payload size \(P\). For the parallel variants I use a task based mergesort with a base case threshold of 10\,000 elements that falls back to \texttt{std::sort} to avoid unnecessary tasking overhead.
 
 \subsection{Sequential baseline}
-The sequential program performs no overlap. It scans the file and fills the \texttt{IndexRec} vector, sorts the entire vector with \texttt{std::sort}, then rewrites the output file by copying exactly \texttt{len} bytes for each record from the source mapping at \texttt{pos}. This run is my reference \(T_1\) for speedup.
+The sequential program performs no overlap. It scans the file and fills the \texttt{IndexRec} vector, sorts the entire vector with \texttt{std::sort}, then rewrites the output file by copying the whole record from the source mapping at \texttt{offset} with size \(\texttt{sizeof(key)}+\texttt{sizeof(len)}+\texttt{len}\). This run is my reference \(T_1\) for speedup.
 
 \subsection{FastFlow implementation}
 I use a single FastFlow farm. With \(n\) threads, the farm consists of one emitter and \(n-1\) workers.
@@ -370,7 +370,7 @@ I use the following symbols and assumptions.
 \begin{itemize}
   \item \(N\): number of records. \quad \(P\): number of nodes (one MPI process per node). \quad \(t\): threads per node.
   \item \(F\): input file size in bytes. It depends on keys and payloads.
-  \item \(s_I\): size in bytes of one \texttt{IndexRec} entry \(\{\texttt{key},\texttt{pos},\texttt{len}\}\) on this platform.
+  \item \(s_I\): size in bytes of one \texttt{IndexRec} entry \(\{\texttt{key},\texttt{offset},\texttt{len}\}\) on this platform.
   \item \(I = N \cdot s_I\): total size in bytes of the in memory index array.
   \item \(B_{\text{read}}\), \(B_{\text{write}}\): effective disk read and write bandwidths.
   \item \(B_{\text{net}}\): effective per process network bandwidth for index transfers.
