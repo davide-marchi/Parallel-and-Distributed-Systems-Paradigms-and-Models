@@ -141,11 +141,11 @@ On the shared cluster, attempts to parallelize disk access did not produce stabl
 This policy isolates the compute and indexing behavior of the implementations from storage noise and makes cross run comparisons meaningful.
 
 \subsection{Variability of the write phase}
-The write phase is highly volatile on the target system. In three executions of the same configuration, the time to rewrite the sorted file differed by almost an order of magnitude. Table~\ref{tab:write-variance} reports the raw measurements.
+The write phase is highly volatile on the target system. In repeated executions of the same configuration, the time to rewrite the sorted file varied widely, by nearly an order of magnitude. Table~\ref{tab:write-variance} reports three representative extremes observed under identical settings.
 
 \begin{table}[h]
   \centering
-  \caption{Observed variability of the rewrite phase for identical runs}
+  \caption{Observed variability of the rewrite phase: representative extremes from repeated identical runs}
   \label{tab:write-variance}
   \begin{tabular}{@{}llll@{}}
     \toprule
