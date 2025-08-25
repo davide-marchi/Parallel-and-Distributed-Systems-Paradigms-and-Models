@@ -1,4 +1,5 @@
 # Parallel and Distributed Systems - Project 1 (MergeSort)
+*Davide Marchi - August 2025*
 
 Distributed out-of-core MergeSort in C++17 using `mmap`. The project implements a common I/O pipeline (index build → index sort → rewrite) across:
 - **Sequential** (baseline)
